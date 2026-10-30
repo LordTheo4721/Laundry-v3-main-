@@ -610,6 +610,16 @@ const TrackOrder = ({ setView }: { setView: (v: View) => void }) => {
       setRescheduleError('Please select both date and time.');
       return;
     }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(rescheduleDate + 'T00:00:00'); d.setHours(0, 0, 0, 0);
+    if (isNaN(d.getTime()) || d < today) {
+      setRescheduleError('Appointment date cannot be in the past.');
+      return;
+    }
+    if (rescheduleTime < '08:00' || rescheduleTime > '18:00') {
+      setRescheduleError('Please choose a time between 8:00 AM and 6:00 PM.');
+      return;
+    }
     setRescheduling(true);
     setRescheduleError('');
     try {

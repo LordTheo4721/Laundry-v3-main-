@@ -232,9 +232,9 @@ export const FALLBACK_PRICING: Record<string, PricingConfig> = {
        tier_5_price_per_kg: 0,
        per_kg_price: 50,
        is_active: 1,
-       delivery_fee: 0,
-     },
-  };
+      delivery_fee: 100,
+      },
+   };
 
 /**
  * Get pricing config with fallback to hardcoded values

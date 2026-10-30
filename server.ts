@@ -245,10 +245,10 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
   // Email verifications table for booking flow
   db.exec(`
     CREATE TABLE IF NOT EXISTS email_verifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL,
-      code TEXT NOT NULL,
-      expires_at DATETIME NOT NULL,
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       email TEXT NOT NULL,
+       token TEXT NOT NULL,
+       expires_at DATETIME NOT NULL,
       verified INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -719,12 +719,18 @@ const machineUpdateSchema = z.object({
     return 0;
   }
 
-  /**
-   * Legacy fixed delivery fee lookup (kept for backward compatibility, now returns 0)
-   */
-  function getDeliveryFee(serviceType: string): number {
-    return 0;
-  }
+    /**
+     * Fixed delivery fee lookup from pricing table (matches frontend pricing config).
+     * Falls back to 0 when no active pricing row exists.
+     */
+    function getDeliveryFee(serviceType: string): number {
+      try {
+        const row = db.prepare("SELECT delivery_fee FROM pricing WHERE service_type = ? AND is_active = 1").get(serviceType) as { delivery_fee: number } | undefined;
+        return row?.delivery_fee ?? 0;
+      } catch {
+        return 0;
+      }
+    }
 
   // Free map APIs: OpenStreetMap Nominatim (geocoding) + OSRM (routing)
   async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
@@ -911,8 +917,21 @@ async function startServer() {
    }
 
    // Security middleware - Helmet for comprehensive security headers
-  app.use(helmet({
-    contentSecurityPolicy: false, // We'll set custom CSP below
+   app.use(helmet({
+     contentSecurityPolicy: {
+       directives: {
+         defaultSrc: ["'self'"],
+         scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+         styleSrc: ["'self'", "'unsafe-inline'"],
+         imgSrc: ["'self'", "data:", "blob:"],
+         connectSrc: ["'self'", "https://nominatim.openstreetmap.org", "https://router.project-osrm.org"],
+         fontSrc: ["'self'", "data:"],
+         objectSrc: ["'none'"],
+         frameAncestors: ["'none'"],
+         baseUri: ["'self'"],
+         formAction: ["'self'"]
+       }
+     },
     crossOriginEmbedderPolicy: false, // Allow embedding for development
     hsts: {
       maxAge: 31536000,
@@ -1091,12 +1110,12 @@ async function startServer() {
   app.post("/api/verify-email/send", (req, res) => {
     try {
       const email = String(req.body?.email || "").trim();
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return res.status(400).json(apiResponse(false, undefined, "Invalid email"));
       }
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-      db.prepare("INSERT INTO email_verifications (email, code, expires_at) VALUES (?, ?, ?)").run(email, code, expires);
+       db.prepare("INSERT INTO email_verifications (email, token, expires_at) VALUES (?, ?, ?)").run(email, code, expires);
       if (emailTransporter) {
         emailTransporter.sendMail({
           from: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -1118,7 +1137,7 @@ async function startServer() {
     try {
       const email = String(req.body?.email || "").trim();
       const code = String(req.body?.code || "").trim();
-      const row = db.prepare("SELECT * FROM email_verifications WHERE email = ? AND code = ? AND verified = 0 ORDER BY id DESC LIMIT 1").get(email, code) as any;
+       const row = db.prepare("SELECT * FROM email_verifications WHERE email = ? AND token = ? AND verified = 0 ORDER BY id DESC LIMIT 1").get(email, code) as any;
       if (!row) return res.status(400).json(apiResponse(false, undefined, "Invalid code"));
       if (new Date(row.expires_at) < new Date()) return res.status(400).json(apiResponse(false, undefined, "Code expired"));
       db.prepare("UPDATE email_verifications SET verified = 1 WHERE id = ?").run(row.id);
@@ -1427,10 +1446,22 @@ async function startServer() {
       if (activeTransaction) {
         return res.status(400).json(apiResponse(false, undefined, "Machine is already in use by another transaction"));
       }
-    }
-
-    // Retry logic for reference number collision (max 3 attempts)
-    let transactionId: number | null = null;
+     }
+ 
+     // Resolve delivery fee once (address-based when possible, else fixed pricing fee)
+     let resolvedDeliveryFee = 0;
+     if (data.delivery_method === 'delivery') {
+       const firstService = items.length > 0 ? items[0].service_type : data.service_type;
+       if (sanitizedAddress) {
+         const quote = await calculateDeliveryFeeByAddress(sanitizedAddress);
+         resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
+       } else {
+         resolvedDeliveryFee = getDeliveryFee(firstService);
+       }
+     }
+ 
+     // Retry logic for reference number collision (max 3 attempts)
+     let transactionId: number | null = null;
     let reference_number = '';
     let total_price = 0;
     let newTransaction: any = null;
@@ -1463,14 +1494,14 @@ async function startServer() {
              serviceTypePricing[serviceType] = { totalQty, totalPrice };
              total_price += totalPrice;
            });
-            // Add delivery fee for delivery method (use first item's service type for consistency)
-            delivery_fee = data.delivery_method === 'delivery' ? getDeliveryFee(items[0].service_type) : 0;
+            // Add delivery fee for delivery method (resolved before transaction, may be address-based)
+            delivery_fee = resolvedDeliveryFee;
           } else {
             const qty = data.quantity || 1;
             total_price = calculatePrice(data.service_type, qty);
             serviceTypePricing[data.service_type] = { totalQty: qty, totalPrice: total_price };
             // Add delivery fee based on delivery method
-            delivery_fee = data.delivery_method === 'delivery' ? getDeliveryFee(data.service_type) : 0;
+            delivery_fee = resolvedDeliveryFee;
           }
          total_price += delivery_fee;
 
@@ -1629,10 +1660,22 @@ async function startServer() {
       if (activeTransaction) {
         return res.status(400).json(apiResponse(false, undefined, "Machine is already in use by another transaction"));
       }
-    }
-
-    // Retry logic for reference number collision (max 3 attempts)
-    let newTransactionId: number | null = null;
+     }
+ 
+     // Resolve delivery fee once (address-based when possible, else fixed pricing fee)
+     let resolvedDeliveryFee = 0;
+     if (data.delivery_method === 'delivery') {
+       const firstService = items.length > 0 ? items[0].service_type : data.service_type;
+       if (sanitizedAddress) {
+         const quote = await calculateDeliveryFeeByAddress(sanitizedAddress);
+         resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
+       } else {
+         resolvedDeliveryFee = getDeliveryFee(firstService);
+       }
+     }
+ 
+     // Retry logic for reference number collision (max 3 attempts)
+     let newTransactionId: number | null = null;
     let reference_number = '';
     let total_price = 0;
     let newTransaction: any = null;
@@ -1665,14 +1708,14 @@ async function startServer() {
              serviceTypePricing[serviceType] = { totalQty, totalPrice };
              total_price += totalPrice;
            });
-            // Add delivery fee for delivery method (use first item's service type for consistency)
-            delivery_fee = data.delivery_method === 'delivery' ? getDeliveryFee(items[0].service_type) : 0;
+            // Add delivery fee for delivery method (resolved before transaction, may be address-based)
+            delivery_fee = resolvedDeliveryFee;
           } else {
             const qty = data.quantity || 1;
             total_price = calculatePrice(data.service_type, qty);
             serviceTypePricing[data.service_type] = { totalQty: qty, totalPrice: total_price };
             // Add delivery fee based on delivery method
-            delivery_fee = data.delivery_method === 'delivery' ? getDeliveryFee(data.service_type) : 0;
+            delivery_fee = resolvedDeliveryFee;
           }
          total_price += delivery_fee;
 
@@ -1822,11 +1865,27 @@ async function startServer() {
      const { reference } = req.params;
      const { appointment_date, appointment_time } = req.body || {};
 
-     if (!appointment_date && !appointment_time) {
-       return res.status(400).json(apiResponse(false, undefined, "No schedule changes provided"));
-     }
-
-     try {
+      if (!appointment_date && !appointment_time) {
+        return res.status(400).json(apiResponse(false, undefined, "No schedule changes provided"));
+      }
+      if (appointment_date && !/^\d{4}-\d{2}-\d{2}$/.test(appointment_date)) {
+        return res.status(400).json(apiResponse(false, undefined, "Invalid date format (YYYY-MM-DD)"));
+      }
+      if (appointment_date) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const d = new Date(appointment_date + 'T00:00:00'); d.setHours(0, 0, 0, 0);
+        if (isNaN(d.getTime()) || d < today) {
+          return res.status(400).json(apiResponse(false, undefined, "Appointment date cannot be in the past"));
+        }
+      }
+      if (appointment_time && !/^\d{2}:\d{2}$/.test(appointment_time)) {
+        return res.status(400).json(apiResponse(false, undefined, "Invalid time format (HH:MM)"));
+      }
+      if (appointment_time && (appointment_time < '08:00' || appointment_time > '18:00')) {
+        return res.status(400).json(apiResponse(false, undefined, "Please choose a time between 8:00 AM and 6:00 PM"));
+      }
+ 
+      try {
        const transaction = db.prepare("SELECT id FROM transactions WHERE reference_number = ?").get(reference) as { id: number } | undefined;
        if (!transaction) {
          return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
@@ -1861,9 +1920,9 @@ async function startServer() {
     const { reference } = req.params;
 
     try {
-      const transaction = db
-        .prepare("SELECT * FROM transactions WHERE reference_number = ?")
-        .get(reference);
+       const transaction = db
+         .prepare("SELECT * FROM transactions WHERE reference_number = ? OR customer_phone = ? OR customer_email = ?")
+         .get(reference, reference, reference);
 
       if (!transaction) {
         return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
@@ -3438,8 +3497,15 @@ const pricingUpdateSchema = z.object({
      }
    });
 
-   // Start the server
-   const server = app.listen(PORT, () => {
+    // Global error handler (must be last middleware)
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      console.error("[ERROR]", err);
+      if (res.headersSent) return next(err);
+      res.status(500).json(apiResponse(false, undefined, "Internal server error"));
+    });
+
+    // Start the server
+    const server = app.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║   Laundry Management Server                       ║

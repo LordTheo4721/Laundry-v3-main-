@@ -25,8 +25,9 @@ import {
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
+import ExcelJS from 'exceljs';
 import { getSalesData, getPricing } from '../../utils/api';
-import type { SalesData } from '../../types';
+import type { SalesData, Pricing } from '../../types';
 
 interface SalesReportsProps {
   setView: (v: string) => void;
@@ -105,31 +106,222 @@ const SalesReports: React.FC<SalesReportsProps> = ({ setView }) => {
     return `${value.toFixed(1)}%`;
   };
 
-  const exportToCSV = () => {
+  const exportToExcel = async () => {
     if (!salesData) return;
-    const rows: string[][] = [];
-    rows.push(['Sales Report', dateRange]);
-    rows.push(['Total Orders', salesData.total_orders.toString()]);
-    rows.push(['Total Sales', salesData.total_sales.toString()]);
-    rows.push(['Revenue Change', `${salesData.revenue_change?.toFixed(1) || 0}%`]);
-    rows.push(['Orders Change', `${salesData.orders_change?.toFixed(1) || 0}%`]);
-    rows.push([]);
-    rows.push(['Service', 'Orders', 'Total']);
-    salesData.service_breakdown?.forEach(s => rows.push([s.service, s.count.toString(), s.total.toString()]));
-    rows.push([]);
-    rows.push(['Payment Status', 'Orders', 'Total']);
-    salesData.payment_breakdown?.forEach(p => rows.push([p.payment_status, p.count.toString(), p.total.toString()]));
-    rows.push([]);
-    rows.push(['Date', 'Orders', 'Total']);
-    salesData.daily_sales?.forEach(d => rows.push([d.date, d.count.toString(), d.total.toString()]));
+    try {
+    const rangeLabels: Record<string, string> = {
+      today: 'Today',
+      week: 'Last 7 Days',
+      month: 'This Month',
+      all: 'All Time',
+    };
 
-    const csvContent = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Use the same pricing data source as the on-screen report
+    const pricing = await getPricing().catch(() => []);
+
+    const workbook = new ExcelJS.Workbook();
+
+    const currencyFmt = '"₱"#,##0.00';
+    const makeSheet = (name: string) => {
+      const ws = workbook.addWorksheet(name);
+      return ws;
+    };
+
+    const addTableSheet = (
+      name: string,
+      columns: { header: string; key: string; width: number }[],
+      rows: any[],
+      currencyKeys: string[] = [],
+      numKeys: string[] = []
+    ) => {
+      const ws = makeSheet(name);
+      ws.columns = columns.map(c => ({ key: c.key, width: c.width }));
+      ws.addTable({
+        name: name.replace(/[^A-Za-z0-9]/g, '') + 'Table',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: { theme: 'TableStyleMedium2', showRowStripes: true },
+        columns: columns.map(c => ({ name: c.header, filterButton: true })),
+        rows: rows.map(r => columns.map(c => r[c.key])),
+      });
+      currencyKeys.forEach(key => {
+        const idx = columns.findIndex(c => c.key === key) + 1;
+        if (idx > 0) ws.getColumn(idx).numFmt = currencyFmt;
+      });
+      numKeys.forEach(key => {
+        const idx = columns.findIndex(c => c.key === key) + 1;
+        if (idx > 0) ws.getColumn(idx).numFmt = '#,##0.###';
+      });
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+      return ws;
+    };
+
+    // Summary sheet (matches on-screen summary metrics exactly)
+    const summaryRows: [string, any][] = [
+      ['Report Period', rangeLabels[dateRange] || dateRange],
+      ['Service Filter', serviceType || 'All Services'],
+      ['Generated At', new Date().toLocaleString('en-PH')],
+      ['Total Orders', salesData.total_orders],
+      ['Total Sales', Number(salesData.total_sales) || 0],
+      ['Pending Orders', salesData.pending_orders],
+      ['Completed Orders', salesData.completed_orders],
+      ['Declined Orders', salesData.declined_orders],
+      ['Walk-in Orders', salesData.walk_in_orders ?? 0],
+      ['Walk-in Sales', Number(salesData.walk_in_sales) || 0],
+      ['Booking Orders', salesData.booking_orders ?? 0],
+      ['Booking Sales', Number(salesData.booking_sales) || 0],
+      ['Average Order Value', Number(salesData.average_order_value) || 0],
+      ['Completion Rate', `${(salesData.completion_rate || 0).toFixed(1)}%`],
+      ['Revenue Change', `${(salesData.revenue_change || 0).toFixed(1)}%`],
+      ['Orders Change', `${(salesData.orders_change || 0).toFixed(1)}%`],
+    ];
+    const summarySheet = addTableSheet(
+      'Summary',
+      [
+        { header: 'Metric', key: 'metric', width: 30 },
+        { header: 'Value', key: 'value', width: 22 },
+      ],
+      summaryRows.map(([m, v]) => ({ metric: m, value: v })),
+      [],
+      []
+    );
+    const moneyMetrics = new Set(['Total Sales', 'Walk-in Sales', 'Booking Sales', 'Average Order Value']);
+    summaryRows.forEach((row, i) => {
+      if (moneyMetrics.has(row[0])) {
+        summarySheet.getCell(i + 2, 2).numFmt = currencyFmt;
+      }
+    });
+
+    // Service breakdown
+    if (salesData.service_breakdown?.length) {
+      addTableSheet(
+        'Services',
+        [
+          { header: 'Service', key: 'service', width: 26 },
+          { header: 'Orders', key: 'count', width: 10 },
+          { header: 'Total Sales', key: 'total', width: 14 },
+        ],
+        salesData.service_breakdown.map(s => ({ service: s.service, count: s.count, total: Number(s.total) || 0 })),
+        ['total'],
+        ['count']
+      );
+    }
+
+    // Payment breakdown
+    if (salesData.payment_breakdown?.length) {
+      addTableSheet(
+        'Payments',
+        [
+          { header: 'Payment Status', key: 'payment_status', width: 18 },
+          { header: 'Orders', key: 'count', width: 10 },
+          { header: 'Total Sales', key: 'total', width: 14 },
+        ],
+        salesData.payment_breakdown.map(p => ({ payment_status: p.payment_status, count: p.count, total: Number(p.total) || 0 })),
+        ['total'],
+        ['count']
+      );
+    }
+
+    // Daily sales
+    if (salesData.daily_sales?.length) {
+      addTableSheet(
+        'Daily Sales',
+        [
+          { header: 'Date', key: 'date', width: 14 },
+          { header: 'Orders', key: 'count', width: 10 },
+          { header: 'Total Sales', key: 'total', width: 14 },
+        ],
+        salesData.daily_sales.map(d => ({ date: d.date, count: d.count, total: Number(d.total) || 0 })),
+        ['total'],
+        ['count']
+      );
+    }
+
+    // Top customers
+    if (salesData.top_customers?.length) {
+      addTableSheet(
+        'Top Customers',
+        [
+          { header: 'Customer Name', key: 'customer_name', width: 24 },
+          { header: 'Phone', key: 'customer_phone', width: 16 },
+          { header: 'Orders', key: 'order_count', width: 10 },
+          { header: 'Total Spent', key: 'total_spent', width: 14 },
+        ],
+        salesData.top_customers.map(c => ({
+          customer_name: c.customer_name,
+          customer_phone: c.customer_phone,
+          order_count: c.order_count,
+          total_spent: Number(c.total_spent) || 0,
+        })),
+        ['total_spent'],
+        ['order_count']
+      );
+    }
+
+    // Peak hours
+    if (salesData.peak_hours?.length) {
+      addTableSheet(
+        'Peak Hours',
+        [
+          { header: 'Hour', key: 'hour', width: 10 },
+          { header: 'Orders', key: 'count', width: 10 },
+        ],
+        salesData.peak_hours.map(h => ({ hour: `${h.hour}:00`, count: h.count })),
+        [],
+        ['count']
+      );
+    }
+
+    // Peak days
+    if (salesData.peak_days?.length) {
+      addTableSheet(
+        'Peak Days',
+        [
+          { header: 'Day', key: 'day', width: 12 },
+          { header: 'Orders', key: 'count', width: 10 },
+        ],
+        salesData.peak_days.map(d => ({ day: d.day, count: d.count })),
+        [],
+        ['count']
+      );
+    }
+
+    // Pricing sheet (reference, same source as app)
+    if (pricing.length) {
+      addTableSheet(
+        'Pricing',
+        [
+          { header: 'Service Type', key: 'service_type', width: 20 },
+          { header: 'Pricing Type', key: 'pricing_type', width: 12 },
+          { header: 'Base Price', key: 'base_price', width: 12 },
+          { header: 'Per Kg Price', key: 'per_kg_price', width: 12 },
+          { header: 'Delivery Fee', key: 'delivery_fee', width: 12 },
+          { header: 'Active', key: 'is_active', width: 8 },
+        ],
+        pricing.map((p: Pricing) => ({
+          service_type: p.service_type,
+          pricing_type: p.pricing_type,
+          base_price: Number(p.base_price) || 0,
+          per_kg_price: Number(p.per_kg_price) || 0,
+          delivery_fee: Number(p.delivery_fee) || 0,
+          is_active: p.is_active,
+        })),
+        ['base_price', 'per_kg_price', 'delivery_fee'],
+        []
+      );
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `sales-report-${dateRange}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `sales-report-${dateRange}-${new Date().toISOString().split('T')[0]}.xlsx`;
     link.click();
     URL.revokeObjectURL(link.href);
+    } catch (err) {
+      console.error('Failed to export sales report:', err);
+    }
   };
 
   const hasData = salesData?.total_orders > 0 || salesData?.total_sales > 0;
@@ -211,11 +403,11 @@ const SalesReports: React.FC<SalesReportsProps> = ({ setView }) => {
             </select>
           )}
           <button
-            onClick={exportToCSV}
-            aria-label="Export sales report as CSV"
+            onClick={exportToExcel}
+            aria-label="Export sales report as Excel"
             className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-1"
           >
-            <Download className="w-3 h-3" aria-hidden="true" /> Export CSV
+              <Download className="w-3 h-3" aria-hidden="true" /> Export Excel
           </button>
           {/* Date Range Selector */}
           <div className="flex gap-2">

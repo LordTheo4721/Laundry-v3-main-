@@ -1,0 +1,205 @@
+[dotenv@17.3.1] injecting env (11) from .env -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+[DB] Database initialized with indexes
+[2m8:55:48 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because lockfile has changed
+
+╔═══════════════════════════════════════════════════╗
+║   Laundry Management Server                       ║
+║   Running on http://localhost:8080             ║
+║   NODE_ENV: development  ║
+║   Database: laundry.db                            ║
+╚═══════════════════════════════════════════════════╝
+    
+::1 - GET / HTTP/1.1 200 566 - 54.265 ms
+::1 - GET /@react-refresh HTTP/1.1 200 - - 19.523 ms
+::1 - GET /@vite/client HTTP/1.1 200 - - 60.304 ms
+::1 - GET /src/main.tsx HTTP/1.1 200 - - 74.215 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 200 - - 0.432 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 7.016 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 6.830 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 6.433 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 200 - - 65.390 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 200 - - 66.859 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css HTTP/1.1 200 - - 423.006 ms
+::1 - GET /favicon.ico HTTP/1.1 200 566 - 7.111 ms
+::1 - GET / HTTP/1.1 200 566 - 5.551 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.412 ms
+::1 - GET /src/main.tsx HTTP/1.1 304 - - 0.149 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.150 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.188 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.359 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.223 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.349 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 3.642 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 2.812 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css HTTP/1.1 304 - - 0.457 ms
+::1 - GET /favicon.ico HTTP/1.1 200 566 - 5.324 ms
+[2m9:15:55 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 5.646 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.276 ms
+::1 - GET /src/main.tsx?t=1793236555000 HTTP/1.1 200 - - 0.286 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.184 ms
+[2m9:15:55 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.124 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.748 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 1.538 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.566 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.283 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.220 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236555000 HTTP/1.1 200 - - 43.665 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 8.816 ms
+[2m9:15:55 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 3.840 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.134 ms
+::1 - GET /src/main.tsx?t=1793236555370 HTTP/1.1 200 - - 0.126 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.061 ms
+[2m9:15:56 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.176 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 0.716 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.485 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.624 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.299 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.211 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236555370 HTTP/1.1 200 - - 37.049 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 10.282 ms
+[2m9:15:56 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 4.301 ms
+::1 - GET /src/main.tsx?t=1793236556318 HTTP/1.1 200 - - 0.205 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.113 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.061 ms
+[2m9:15:57 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.633 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 1.327 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.889 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.275 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.174 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236556318 HTTP/1.1 200 - - 41.788 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.089 ms
+[2m9:15:57 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 5.218 ms
+[2m9:15:57 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 3.151 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.257 ms
+::1 - GET /src/main.tsx?t=1793236557388 HTTP/1.1 200 - - 0.245 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.097 ms
+[2m9:15:58 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.098 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.337 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 1.570 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 1.636 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.179 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.198 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236557388 HTTP/1.1 200 - - 38.954 ms
+[2m9:15:58 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 7.639 ms
+::1 - GET / HTTP/1.1 200 582 - 2.779 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.193 ms
+::1 - GET /src/main.tsx?t=1793236558332 HTTP/1.1 200 - - 0.242 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.161 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.119 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 0.873 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.576 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.502 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.230 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.257 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236558332 HTTP/1.1 200 - - 0.341 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 3.759 ms
+[2m9:16:03 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 2.852 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.295 ms
+[2m9:16:04 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /src/main.tsx?t=1793236563166 HTTP/1.1 200 - - 0.714 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.083 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.100 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 2.555 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 1.063 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 2.163 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.172 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.190 ms
+[2m9:16:04 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 4.424 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236564240 HTTP/1.1 200 - - 44.471 ms
+::1 - GET / HTTP/1.1 200 582 - 2.824 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.232 ms
+::1 - GET /src/main.tsx?t=1793236564308 HTTP/1.1 200 - - 0.185 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.138 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.250 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 0.900 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.866 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 1.161 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.195 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.130 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236564308 HTTP/1.1 200 - - 0.303 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 2.956 ms
+[2m9:16:23 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 4.266 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.181 ms
+::1 - GET /src/main.tsx?t=1793236583302 HTTP/1.1 200 - - 0.115 ms
+[2m9:16:24 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.101 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.133 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 2.452 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 2.272 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 1.605 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.249 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.164 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236583302 HTTP/1.1 200 - - 39.063 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 7.089 ms
+[2m9:16:24 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 2.879 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.134 ms
+::1 - GET /src/main.tsx?t=1793236584328 HTTP/1.1 200 - - 0.131 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.052 ms
+[2m9:16:25 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.117 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.701 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 1.985 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 1.085 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.320 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.212 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 3.482 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236584328 HTTP/1.1 200 - - 47.850 ms
+[2m9:16:25 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 3.936 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.174 ms
+::1 - GET /src/main.tsx?t=1793236585359 HTTP/1.1 200 - - 0.155 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.071 ms
+[2m9:16:26 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.154 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 0.915 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.758 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 1.522 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.184 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.167 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 2.968 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236585359 HTTP/1.1 200 - - 40.392 ms
+[2m9:16:26 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 3.436 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.129 ms
+::1 - GET /src/main.tsx?t=1793236586315 HTTP/1.1 200 - - 0.112 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.050 ms
+[2m9:16:27 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.133 ms
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.013 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.759 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.515 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.206 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.181 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236586315 HTTP/1.1 200 - - 36.535 ms
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 12.856 ms
+[2m9:16:27 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET / HTTP/1.1 200 582 - 3.847 ms
+::1 - GET /src/main.tsx?t=1793236587313 HTTP/1.1 200 - - 0.174 ms
+::1 - GET /@vite/client HTTP/1.1 304 - - 0.080 ms
+::1 - GET /@react-refresh HTTP/1.1 304 - - 0.047 ms
+[2m9:16:28 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /node_modules/.vite/deps/react_jsx-dev-runtime.js?v=3f037430 HTTP/1.1 504 - - 1.150 ms
+::1 - GET /node_modules/.vite/deps/react.js?v=3f037430 HTTP/1.1 504 - - 0.911 ms
+::1 - GET /node_modules/.vite/deps/react-dom_client.js?v=4e38f190 HTTP/1.1 504 - - 0.849 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/App.tsx HTTP/1.1 304 - - 0.202 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/components/ErrorBoundary.tsx HTTP/1.1 304 - - 0.090 ms
+::1 - GET /@fs/C:/Users/Ian%20Borja/Desktop/Capstone/laundry-v3-main/src/index.css?t=1793236587313 HTTP/1.1 200 - - 36.694 ms
+::1 - GET /node_modules/vite/dist/client/env.mjs HTTP/1.1 304 - - 0.081 ms
+[2m9:16:28 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mC:/Users/Ian Borja/Desktop/Capstone/laundry-v3-main/server.out[22m
+::1 - GET /favicon.ico HTTP/1.1 200 582 - 3.398 ms
+
+c:\Users\Ian Borja\Desktop\Capstone\laundry-v3-main>

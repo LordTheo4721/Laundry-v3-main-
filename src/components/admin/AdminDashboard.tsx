@@ -417,7 +417,7 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
               </div>
             </div>
  
-            <div className="grid grid-cols-2 gap-4 sm:gap-8 mb-8">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 mb-8">
               <div>
                 <p className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-1">Customer</p>
                 <p className="font-bold text-zinc-900">{createdTransaction.customer_name}</p>
@@ -703,7 +703,7 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
 
           <div className="space-y-4">
             <label className="text-xs font-black text-zinc-400 uppercase tracking-widest">How do we get it?</label>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <button
                 type="button"
                 onClick={() => setFormData({...formData, delivery_method: 'pickup'})}
@@ -2793,7 +2793,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                       {/* Delivery & Payment */}
                       <div className="space-y-4 pt-4">
                         <label className="text-xs font-black text-zinc-400 uppercase tracking-widest">How do we get it?</label>
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                           <button
                             type="button"
                             onClick={() => setWalkInForm({...walkInForm, delivery_method: 'pickup'})}
@@ -3358,7 +3358,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
         </div>
 
         {/* Search and Transactions Table */}
-        <div className="w-full bg-white rounded-[40px] border-8 border-zinc-50 shadow-2xl overflow-hidden">
+        <div className="w-full bg-white rounded-2xl sm:rounded-[40px] border-4 sm:border-8 border-zinc-50 shadow-2xl overflow-hidden">
           <div className="p-6 sm:p-8 border-b border-zinc-50 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
             <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-900 tracking-tighter">Recent Activity</h2>
             <div className="relative w-full md:w-auto">
@@ -3478,7 +3478,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     </td>
                     <td className="px-3 sm:px-8 py-3 sm:py-6">
                       <div className="ml-auto flex items-start justify-end gap-2">
-                        <div className="flex max-w-[180px] flex-wrap items-center justify-end gap-2">
+                        <div className="flex max-w-[140px] sm:max-w-[180px] flex-wrap items-center justify-end gap-2">
                           {/* Pending: Machine Assignment + Accept/Decline */}
                           {t.status === 'pending' && (
                             <div className="flex flex-wrap items-center justify-end gap-2">

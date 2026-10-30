@@ -71,7 +71,7 @@ const isValidPhone = (phone: string): boolean => {
 };
 const isValidAppointmentDate = (dateStr: string): boolean => {
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr + 'T00:00:00'); d.setHours(0, 0, 0, 0);
   return !isNaN(d.getTime()) && d >= today;
 };
 
@@ -113,11 +113,31 @@ const UserBooking = () => {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [loading] = useState(false);
-  const [emailCode, setEmailCode] = useState('');
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailCode, setEmailCode] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return typeof parsed.emailCode === 'string' ? parsed.emailCode : '';
+      }
+    } catch {}
+    return '';
+  });
+  const [emailVerified, setEmailVerified] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed.emailVerified === true;
+      }
+    } catch {}
+    return false;
+  });
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [dynamicPricing, setDynamicPricing] = useState<Record<string, any>>({});
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
 
   // Fetch dynamic pricing
   useEffect(() => {
@@ -133,14 +153,53 @@ const UserBooking = () => {
       .catch(() => {});
   }, []);
   const [confirmationLoading, setConfirmationLoading] = useState(false);
+
+  // Quote delivery fee by address when delivery is selected
+  useEffect(() => {
+    if (formData.delivery_method !== 'delivery' || !formData.address.trim()) {
+      setDeliveryFee(0);
+      return;
+    }
+    let cancelled = false;
+    setDeliveryQuoteLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/delivery/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: formData.address }),
+        });
+        const data = await res.json();
+        if (!cancelled && data.success && data.data) {
+          setDeliveryFee(Number(data.data.fee) || 0);
+        } else if (!cancelled) {
+          // Fallback to fixed pricing fee
+          const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
+          const firstService = items.length > 0 ? items[0].service_type : LAUNDRY_SERVICE;
+          const cfg = pricingMap.get(firstService) || FALLBACK_PRICING[firstService];
+          setDeliveryFee(getDeliveryFee(cfg));
+        }
+      } catch {
+        if (!cancelled) {
+          const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
+          const firstService = items.length > 0 ? items[0].service_type : LAUNDRY_SERVICE;
+          const cfg = pricingMap.get(firstService) || FALLBACK_PRICING[firstService];
+          setDeliveryFee(getDeliveryFee(cfg));
+        }
+      } finally {
+        if (!cancelled) setDeliveryQuoteLoading(false);
+      }
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [formData.delivery_method, formData.address, dynamicPricing]);
   const [bookedTransaction, setBookedTransaction] = useState<Transaction | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ step, formData, items }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ step, formData, items, emailCode, emailVerified }));
     } catch {}
-  }, [step, formData, items]);
+  }, [step, formData, items, emailCode, emailVerified]);
 
   // Prevent background scroll when confirmation modal is open
   useEffect(() => {
@@ -170,7 +229,7 @@ const UserBooking = () => {
   };
 
   const updateItemQty = (index: number, value: string) => {
-    const qty = Math.max(1, parseInt(value) || 1);
+    const qty = Math.min(100, Math.max(1, parseInt(value) || 1));
     setItems(prev => prev.map((it, i) => (i === index ? { ...it, quantity: qty } : it)));
   };
 
@@ -199,13 +258,20 @@ const UserBooking = () => {
     Object.keys(byService).forEach(st => {
       serviceTotal += calculatePriceWithFallback(st, byService[st], pricingMap);
     });
-    const firstService = items.length > 0 ? items[0].service_type : LAUNDRY_SERVICE;
-    const cfg = pricingMap.get(firstService) || FALLBACK_PRICING[firstService];
-    const deliveryFee = formData.delivery_method === 'delivery' ? getDeliveryFee(cfg) : 0;
-    return serviceTotal + deliveryFee;
+    const fee = formData.delivery_method === 'delivery' ? deliveryFee : 0;
+    return serviceTotal + fee;
   };
 
   const grandTotal = computeGrandTotal();
+
+  const estimateItemPrice = (item: BookingItem): number => {
+    const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
+    const byService: Record<string, number> = {};
+    items.forEach(it => { byService[it.service_type] = (byService[it.service_type] || 0) + it.quantity; });
+    const totalQty = byService[item.service_type] || item.quantity;
+    const totalPrice = calculatePriceWithFallback(item.service_type, totalQty, pricingMap);
+    return totalQty > 0 ? (totalPrice / totalQty) * item.quantity : 0;
+  };
 
   const validateStep = (s: number): boolean => {
     const errors: Record<string, string> = {};
@@ -219,11 +285,13 @@ const UserBooking = () => {
       items.forEach((it, i) => {
         if (!it.service_type) errors[`item_${i}`] = 'Please select a laundry service';
         if (!it.quantity || it.quantity < 1) errors[`item_${i}`] = 'Quantity must be at least 1';
+        else if (it.quantity > 100) errors[`item_${i}`] = 'Quantity cannot exceed 100';
       });
     } else if (s === 3) {
       if (!formData.appointment_date) errors.appointment_date = 'Please select an appointment date';
       else if (!isValidAppointmentDate(formData.appointment_date)) errors.appointment_date = 'Appointment date cannot be in the past';
       if (!formData.appointment_time) errors.appointment_time = 'Please select an appointment time';
+      else if (formData.appointment_time < '08:00' || formData.appointment_time > '18:00') errors.appointment_time = 'Please choose a time between 8:00 AM and 6:00 PM';
       if (formData.delivery_method === 'delivery' && !formData.address.trim()) errors.address = 'Please enter your address for delivery';
     }
     setFormErrors(errors);
@@ -467,7 +535,7 @@ const UserBooking = () => {
                     className={`w-full p-5 bg-zinc-50 border-4 rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg ${formErrors.customer_email ? 'border-rose-500' : 'border-transparent'}`}
                     placeholder="you@example.com"
                     value={formData.customer_email}
-                    onChange={e => { updateFormData({ customer_email: e.target.value }); if (formErrors.customer_email) setFormErrors(p => ({ ...p, customer_email: '' })); }}
+                    onChange={e => { updateFormData({ customer_email: e.target.value }); setEmailVerified(false); setEmailCode(''); if (formErrors.customer_email) setFormErrors(p => ({ ...p, customer_email: '' })); }}
                     aria-label="Customer email address"
                     aria-invalid={!!formErrors.customer_email}
                   />
@@ -575,7 +643,14 @@ const UserBooking = () => {
                       </div>
                       <div className="flex justify-between items-center pt-2 border-t border-zinc-200">
                         <p className="text-[10px] font-black text-zinc-400 uppercase">Estimated Price</p>
-                        <p className="font-black text-blue-600">₱{calculatePriceWithDynamic(item.service_type, item.quantity).toFixed(2)}</p>
+                        <p className="font-black text-blue-600">₱{(() => {
+                          const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
+                          const byService: Record<string, number> = {};
+                          items.forEach(it => { byService[it.service_type] = (byService[it.service_type] || 0) + it.quantity; });
+                          const totalQty = byService[item.service_type] || item.quantity;
+                          const totalPrice = calculatePriceWithFallback(item.service_type, totalQty, pricingMap);
+                          return ((totalPrice / totalQty) * item.quantity).toFixed(2);
+                        })()}</p>
                       </div>
                     </div>
                   ))}
@@ -616,6 +691,8 @@ const UserBooking = () => {
                     <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Clock className="w-4 h-4" /> Time</label>
                     <input
                       type="time"
+                      min="08:00"
+                      max="18:00"
                       className={`w-full p-5 bg-zinc-50 border-4 rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg ${formErrors.appointment_time ? 'border-rose-500' : 'border-transparent'}`}
                       value={formData.appointment_time}
                       onChange={e => { updateFormData({ appointment_time: e.target.value }); if (formErrors.appointment_time) setFormErrors(p => ({ ...p, appointment_time: '' })); }}
@@ -634,16 +711,16 @@ const UserBooking = () => {
                       onClick={() => updateFormData({ delivery_method: 'pickup' })}
                       className={`p-6 rounded-[32px] border-4 flex flex-col items-center gap-3 transition-all ${formData.delivery_method === 'pickup' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-zinc-50 bg-zinc-50 text-zinc-400 hover:border-zinc-100'}`}
                     >
-                      <Truck className="w-8 h-8" />
-                      <span className="font-black uppercase tracking-widest text-sm">Drop-off</span>
+                       <Truck className="w-8 h-8" />
+                       <span className="font-black uppercase tracking-widest text-sm">Drop-off (You bring it)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => updateFormData({ delivery_method: 'delivery' })}
                       className={`p-6 rounded-[32px] border-4 flex flex-col items-center gap-3 transition-all ${formData.delivery_method === 'delivery' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-zinc-50 bg-zinc-50 text-zinc-400 hover:border-zinc-100'}`}
                     >
-                      <Package className="w-8 h-8" />
-                      <span className="font-black uppercase tracking-widest text-sm">Pick-up</span>
+                       <Package className="w-8 h-8" />
+                       <span className="font-black uppercase tracking-widest text-sm">Pick-up & Delivery</span>
                     </button>
                   </div>
                 </div>
@@ -699,9 +776,9 @@ const UserBooking = () => {
                       <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-zinc-100">
                         <div>
                           <p className="font-bold text-zinc-900">{it.service_type}</p>
-                          <p className="text-sm text-zinc-500">Qty: {it.quantity} × ₱{(calculatePriceWithDynamic(it.service_type, it.quantity) / it.quantity).toFixed(2)}</p>
+                          <p className="text-sm text-zinc-500">Qty: {it.quantity} × ₱{(estimateItemPrice(it) / it.quantity).toFixed(2)}</p>
                         </div>
-                        <p className="font-black text-blue-600">₱{calculatePriceWithDynamic(it.service_type, it.quantity).toFixed(2)}</p>
+                        <p className="font-black text-blue-600">₱{estimateItemPrice(it).toFixed(2)}</p>
                       </div>
                     ))}
                     <div className="flex justify-between items-center pt-2 border-t border-zinc-200">
@@ -721,16 +798,11 @@ const UserBooking = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between"><span className="text-zinc-500">Date</span><span className="font-bold text-zinc-900">{formData.appointment_date}</span></div>
                     <div className="flex justify-between"><span className="text-zinc-500">Time</span><span className="font-bold text-zinc-900">{formData.appointment_time}</span></div>
-                    <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900 capitalize">{formData.delivery_method}</span></div>
+                    <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900">{formData.delivery_method === 'delivery' ? 'Pick-up & Delivery' : 'Drop-off'}</span></div>
                      {formData.delivery_method === 'delivery' && (
                        <>
                           <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
-                          <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee</span><span className="font-bold text-emerald-600">₱{(() => {
-                            const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
-                            const firstService = items.length > 0 ? items[0].service_type : LAUNDRY_SERVICE;
-                            const cfg = pricingMap.get(firstService) || FALLBACK_PRICING[firstService];
-                            return getDeliveryFee(cfg).toFixed(2);
-                          })()}</span></div>
+                           <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
 
 
                        </>
@@ -780,7 +852,7 @@ const UserBooking = () => {
                 disabled={loading}
                 className="flex-1 py-3 sm:py-4 bg-blue-500 text-white rounded-2xl font-black text-base sm:text-lg hover:bg-blue-600 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Review Order <ChevronRight className="w-5 h-5" /></>}
+                <>Review Order <ChevronRight className="w-5 h-5" /></>
               </button>
             )}
           </div>
@@ -823,7 +895,7 @@ const UserBooking = () => {
                           <p className="font-bold text-zinc-900">{it.service_type}</p>
                           <p className="text-sm text-zinc-500">Qty: {it.quantity}</p>
                         </div>
-                        <p className="font-black text-blue-600">₱{calculatePriceWithDynamic(it.service_type, it.quantity).toFixed(2)}</p>
+                         <p className="font-black text-blue-600">₱{estimateItemPrice(it).toFixed(2)}</p>
                       </div>
                     ))}
                     <div className="flex justify-between items-center pt-2 border-t border-zinc-200">
@@ -841,16 +913,11 @@ const UserBooking = () => {
                 <div className="bg-zinc-50 rounded-2xl p-4 sm:p-5">
                   <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Truck className="w-4 h-4" /> Delivery Method</h3>
                   <div className="space-y-2">
-                    <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900 capitalize">{formData.delivery_method}</span></div>
+                    <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900">{formData.delivery_method === 'delivery' ? 'Pick-up & Delivery' : 'Drop-off'}</span></div>
                      {formData.delivery_method === 'delivery' && (
                        <>
                           <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
-                          <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee</span><span className="font-bold text-emerald-600">₱{(() => {
-                            const pricingMap = new Map<string, PricingConfig>(Object.entries(mergedPricing()) as [string, PricingConfig][]);
-                            const firstService = items.length > 0 ? items[0].service_type : LAUNDRY_SERVICE;
-                            const cfg = pricingMap.get(firstService) || FALLBACK_PRICING[firstService];
-                            return getDeliveryFee(cfg).toFixed(2);
-                          })()}</span></div>
+                           <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
 
 
                        </>
