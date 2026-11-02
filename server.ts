@@ -964,7 +964,7 @@ async function startServer() {
     next();
   });
 
-  // Ensure uploads directory exists (Hostinger/persistent disk)
+  // Ensure uploads directory exists
   const uploadsPath = path.join(__dirname, "uploads");
   try { fs.mkdirSync(uploadsPath, { recursive: true }); } catch { /* ignore */ }
   // Serve uploaded files statically - require authentication to prevent unauthorized access
@@ -980,7 +980,7 @@ async function startServer() {
       /^https:\/\/[a-z0-9-]+\.github\.dev$/,
        // Render domains (explicit production host only)
     ];
-    // Allow additional origins from env (comma-separated), e.g. Hostinger domain
+    // Allow additional origins from env (comma-separated)
     const envOrigins = (process.env.ALLOWED_ORIGINS || '')
       .split(',')
       .map((s) => s.trim())
