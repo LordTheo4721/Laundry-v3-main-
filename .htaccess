@@ -1,0 +1,37 @@
+# Root-level Apache config for Hostinger static hosting.
+# The production build lives in dist/. This rewrites all requests there so
+# that uploading the repository root (instead of dist/) still serves the app.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Serve the built bundle's assets and public files from dist/
+  RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
+  RewriteRule ^(happy-wash-mark-transparent\.png)$ dist/$1 [L]
+
+  # SPA fallback: any non-file/non-dir request -> dist/index.html
+  RewriteCond %{REQUEST_URI} !^/dist/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /dist/index.html [L]
+</IfModule>
+
+# MIME types
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+</IfModule>
+
+# Disable PHP errors
+<IfModule mod_php.c>
+  php_flag display_errors off
+</IfModule>
+<IfModule mod_php7.c>
+  php_flag display_errors off
+</IfModule>
+<IfModule mod_php8.c>
+  php_flag display_errors off
+</IfModule>
+
+Options -Indexes
