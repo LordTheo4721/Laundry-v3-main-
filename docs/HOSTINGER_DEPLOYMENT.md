@@ -34,6 +34,8 @@ the API will not work. For a fully working site use option B.
 1. Build & start commands (set in hPanel):
    - Build: `npm install && npm run build`
    - Start: `npm start` (runs `npx tsx server.ts`)
+   - Entry file: `server.js` (Node.js shim that loads `server.ts` via tsx).
+     If Hostinger accepts TypeScript entry files directly, `server.ts` also works.
 2. Environment variables (hPanel → Environment):
    ```
    PORT=<provided by host, usually 8080>
