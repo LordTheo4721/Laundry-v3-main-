@@ -195,7 +195,20 @@ Watch stdout for `[DB]`, Vite errors, and the startup banner. The banner now pri
 
 ---
 
-## 6. Verification checklist
+## 6. Hostinger-specific notes
+
+See `docs/HOSTINGER_DEPLOYMENT.md` for full steps. Quick points:
+
+- Shared hosting: upload `dist/` contents only, never the source tree.
+- `.htaccess` is shipped in `dist/` (copied from `public/.htaccess`).
+- File permissions: dirs `755`, files `644`.
+- DNS: `nslookup yourdomain.com` must resolve to Hostinger.
+- SSL: enable Let's Encrypt in hPanel; `.htaccess` forces HTTPS.
+- PHP errors: disabled via `.htaccess` (`display_errors off`).
+- Server logs (Node hosting): hPanel → Node.js → Logs; look for
+  `ADMIN_PASSWORD`/`JWT_SECRET` boot errors and `better-sqlite3` module errors.
+
+## 7. Verification checklist
 
 - [ ] `npm run lint` passes (no type errors).
 - [ ] `npm run build` succeeds and `dist/index.html` exists.
