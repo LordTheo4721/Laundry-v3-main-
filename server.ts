@@ -964,13 +964,15 @@ async function startServer() {
     next();
   });
 
-  // Serve uploaded files statically - require authentication to prevent unauthorized access
+  // Ensure uploads directory exists (Hostinger/persistent disk)
   const uploadsPath = path.join(__dirname, "uploads");
+  try { fs.mkdirSync(uploadsPath, { recursive: true }); } catch { /* ignore */ }
+  // Serve uploaded files statically - require authentication to prevent unauthorized access
   app.use("/uploads", requireAuth, express.static(uploadsPath));
 
   // CORS middleware - strict origin validation
   app.use((req, res, next) => {
-    const allowedOrigins = [
+    const allowedOrigins: (string | RegExp)[] = [
       'http://localhost:8080',
       'https://happywashlandry.onrender.com',
       // GitHub Codespaces patterns - more specific to prevent subdomain takeover
@@ -978,6 +980,12 @@ async function startServer() {
       /^https:\/\/[a-z0-9-]+\.github\.dev$/,
        // Render domains (explicit production host only)
     ];
+    // Allow additional origins from env (comma-separated), e.g. Hostinger domain
+    const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    envOrigins.forEach((o) => allowedOrigins.push(o));
     const origin = req.headers.origin;
     const isAllowed = allowedOrigins.some(o => 
       typeof o === 'string' ? o === origin : o.test(origin || '')

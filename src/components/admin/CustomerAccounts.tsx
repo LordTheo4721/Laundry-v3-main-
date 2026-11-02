@@ -15,7 +15,7 @@ interface CustomerAccountsProps {
   setView: (v: string) => void;
 }
 
-const CUSTOMERS_PER_PAGE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75];
 
 const CustomerAccounts: React.FC<CustomerAccountsProps> = ({ setView }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -23,16 +23,17 @@ const CustomerAccounts: React.FC<CustomerAccountsProps> = ({ setView }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState(false);
 
-  const fetchCustomers = useCallback(async (targetPage: number, search: string) => {
+  const fetchCustomers = useCallback(async (targetPage: number, search: string, limit: number = pageSize) => {
     try {
       setLoading(true);
       const { customers: data, meta: pageMeta } = await getCustomersPage({
         page: targetPage,
-        limit: CUSTOMERS_PER_PAGE,
+        limit,
         search,
       });
       setCustomers(data);
@@ -44,7 +45,7 @@ const CustomerAccounts: React.FC<CustomerAccountsProps> = ({ setView }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pageSize]);
 
   // Debounce the search so typing does not fire a request per keystroke.
   // A ref guards the initial mount so we don't double-fetch on first render.
@@ -212,6 +213,21 @@ const CustomerAccounts: React.FC<CustomerAccountsProps> = ({ setView }) => {
                   Showing {((meta.page - 1) * meta.limit) + 1}-{Math.min(meta.page * meta.limit, meta.total)} of {meta.total} customers
                 </p>
                 <div className="flex items-center gap-2">
+                  <select
+                    aria-label="Page size"
+                    value={pageSize}
+                    onChange={(e) => {
+                      const nextSize = Number(e.target.value);
+                      setPageSize(nextSize);
+                      setPage(1);
+                      fetchCustomers(1, debouncedSearch, nextSize);
+                    }}
+                    className="px-2 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest bg-zinc-50 text-zinc-900 border border-zinc-200"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={() => {
                       const next = Math.max(1, page - 1);
