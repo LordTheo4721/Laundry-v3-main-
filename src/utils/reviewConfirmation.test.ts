@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { confirmReviewSubmission } from './reviewConfirmation';
 
 describe('confirmReviewSubmission', () => {

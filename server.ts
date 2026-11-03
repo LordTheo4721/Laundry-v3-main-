@@ -1236,7 +1236,7 @@ async function startServer() {
 
       if (!result.success) {
         return res.status(400).json(
-          apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+          apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
         );
       }
 
@@ -1346,7 +1346,7 @@ async function startServer() {
     try {
       const result = updateUsernameSchema.safeParse(req.body);
       if (!result.success) {
-        return res.status(400).json(apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", ")));
+        return res.status(400).json(apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", ")));
       }
 
       const { username, currentPassword } = result.data;
@@ -1411,7 +1411,7 @@ async function startServer() {
     try {
       const result = changePasswordSchema.safeParse(req.body);
       if (!result.success) {
-        return res.status(400).json(apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", ")));
+        return res.status(400).json(apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", ")));
       }
 
       const { currentPassword, newPassword } = result.data;
@@ -1468,7 +1468,7 @@ async function startServer() {
 
     if (!result.success) {
       return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+        apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
       );
     }
 
@@ -1671,9 +1671,9 @@ async function startServer() {
      const result = transactionSchema.safeParse(req.body);
 
      if (!result.success) {
-       console.log("[DEBUG] admin transaction validation errors:", JSON.stringify(result.error.errors));
+       console.log("[DEBUG] admin transaction validation errors:", JSON.stringify(result.error.issues));
        return res.status(400).json(
-         apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+         apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
        );
      }
 
@@ -2385,7 +2385,7 @@ async function startServer() {
 
     if (!result.success) {
       return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+        apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
       );
     }
 
@@ -2703,7 +2703,7 @@ async function startServer() {
 
     if (!result.success) {
       return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+        apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
       );
     }
 
@@ -2790,7 +2790,7 @@ async function startServer() {
 
     if (!result.success) {
       return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+        apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
       );
     }
 
@@ -2955,7 +2955,7 @@ const pricingUpdateSchema = z.object({
 
     if (!result.success) {
       return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+        apiResponse(false, undefined, result.error.issues.map((e) => e.message).join(", "))
       );
     }
 
