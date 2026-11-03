@@ -3,12 +3,19 @@ import deasync from "deasync";
 import type { Database as DbIface, Statement, RunResult, DatabaseConfig } from "./types";
 import { translateSql } from "./sql";
 
-function sync<T>(promise: Promise<T>): T {
+function sync<T>(promise: Promise<T>, timeoutMs = 15000): T {
   let result: T | undefined;
   let error: any;
   let done = false;
+  const timer = setTimeout(() => {
+    if (!done) {
+      error = new Error(`Database operation timed out after ${timeoutMs}ms`);
+      done = true;
+    }
+  }, timeoutMs);
   promise.then((r) => { result = r; done = true; }).catch((e) => { error = e; done = true; });
   deasync.loopWhile(() => !done);
+  clearTimeout(timer);
   if (error) throw error;
   return result as T;
 }
@@ -23,7 +30,10 @@ export function createMysqlAdapter(config: DatabaseConfig): DbIface {
     ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
     connectionLimit: config.connectionLimit,
     waitForConnections: true,
-    queueLimit: 0,
+    queueLimit: typeof config.queueLimit === "number" ? config.queueLimit : 100,
+    connectTimeout: typeof config.connectTimeout === "number" ? config.connectTimeout : 10000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
     multipleStatements: true,
     dateStrings: true,
     charset: "utf8mb4",

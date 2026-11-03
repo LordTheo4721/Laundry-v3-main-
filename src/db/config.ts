@@ -40,6 +40,8 @@ export function getDatabaseConfig(overrides: Partial<DatabaseConfig> = {}): Data
     database: overrides.database ?? env("DB_DATABASE", env("MYSQL_DATABASE", env("MYSQL_DB", "laundry"))),
     ssl: overrides.ssl ?? toBool(env("DB_SSL", env("MYSQL_SSL", "false")), false),
     connectionLimit: overrides.connectionLimit ?? toInt(env("DB_POOL_SIZE", env("MYSQL_POOL_SIZE", "10")), 10),
+    queueLimit: overrides.queueLimit ?? toInt(env("DB_QUEUE_LIMIT", env("MYSQL_QUEUE_LIMIT", "100")), 100),
+    connectTimeout: overrides.connectTimeout ?? toInt(env("DB_CONNECT_TIMEOUT", env("MYSQL_CONNECT_TIMEOUT", "10000")), 10000),
     fallbackToSqlite: overrides.fallbackToSqlite ?? toBool(env("DB_FALLBACK_TO_SQLITE", "true"), true),
   };
   return { ...cfg, ...overrides };

@@ -26,26 +26,43 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Environment variables with defaults
-const PORT = parseInt(process.env.PORT || "8080", 10);
+const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const DB_NAME = process.env.DB_NAME || "laundry.db";
 const MACHINE_DEFAULT_TIME = parseInt(process.env.MACHINE_DEFAULT_TIME || "2700", 10);
 
-// JWT_SECRET must be set and strong in all environments
+// NODE_ENV should be production on the live server; warn (never fail) if unset/misconfigured.
+if (!process.env.NODE_ENV) {
+  console.warn("[WARN] NODE_ENV is not set. Set NODE_ENV=production on the live server.");
+}
+
+// JWT_SECRET must be set and strong in production
 const rawJwtSecret = process.env.JWT_SECRET || "";
-if (!rawJwtSecret || rawJwtSecret.length < 32 || rawJwtSecret.includes("change-in-production") || rawJwtSecret.includes("your-super-secret")) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("JWT_SECRET must be a strong secret (at least 32 characters) in production");
+const isProduction = process.env.NODE_ENV === "production";
+if (!rawJwtSecret) {
+  if (isProduction) {
+    throw new Error("Missing required environment variable: JWT_SECRET");
   }
-  console.warn("[WARN] JWT_SECRET is missing or weak — using a temporary development secret. Set a strong JWT_SECRET in .env.");
+  console.warn("[WARN] JWT_SECRET is missing — using a temporary development secret. Set a strong JWT_SECRET in .env.");
+} else if (rawJwtSecret.length < 32 || rawJwtSecret.includes("change-in-production") || rawJwtSecret.includes("your-super-secret")) {
+  if (isProduction) {
+    throw new Error("Invalid environment variable: JWT_SECRET (must be at least 32 characters and not a placeholder)");
+  }
+  console.warn("[WARN] JWT_SECRET is weak — using a temporary development secret. Set a strong JWT_SECRET in .env.");
 }
 const JWT_SECRET = rawJwtSecret && rawJwtSecret.length >= 32 && !rawJwtSecret.includes("change-in-production") && !rawJwtSecret.includes("your-super-secret")
   ? rawJwtSecret
   : uuidv4();
 
 // Pre-hash admin password once at startup for secure comparison
-if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12 || ADMIN_PASSWORD.includes("change-me") || ADMIN_PASSWORD.includes("change-me-to")) {
-  throw new Error("ADMIN_PASSWORD must be a strong password (at least 12 characters) and not a placeholder");
+if (!ADMIN_PASSWORD) {
+  throw new Error("Missing required environment variable: ADMIN_PASSWORD");
+}
+if (ADMIN_PASSWORD.length < 12) {
+  throw new Error("Invalid environment variable: ADMIN_PASSWORD (must be at least 12 characters)");
+}
+if (ADMIN_PASSWORD.includes("change-me") || ADMIN_PASSWORD.includes("change-me-to")) {
+  throw new Error("Invalid environment variable: ADMIN_PASSWORD (placeholder value is not allowed)");
 }
 // Use higher cost factor (12) for better security against brute force
 const HASHED_ADMIN_PASSWORD = bcrypt.hashSync(ADMIN_PASSWORD, 12);
@@ -591,23 +608,23 @@ const transactionSchema = z.object({
   appointment_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)").optional(),
    delivery_method: z.enum(["pickup", "delivery"]).optional(),
    address: z.string().max(200).optional(),
-   delivery_zone_id: z.number().int().positive().optional(),
+   delivery_zone_id: z.number().int().positive().nullable().optional(),
   payment_status: z.enum(["unpaid", "paid"]).optional(),
   payment_method: z.string().optional(),
   machine_id: z.number().int().positive().nullable().optional(),
-  weight: z.number().min(0).optional(),
-  items: z.array(z.object({
-    service_type: z.string().min(1, "Service type is required"),
-    quantity: z.number().int().min(1).max(100).optional(),
-    unit_price: z.number().min(0).optional(),
-  })).min(1, "At least one item is required").optional(),
+   weight: z.number().min(0).nullable().optional(),
+   items: z.array(z.object({
+     service_type: z.string().min(1, "Service type is required"),
+     quantity: z.number().int().min(1).max(100).nullable().optional(),
+     unit_price: z.number().min(0).nullable().optional(),
+   })).min(1, "At least one item is required").optional(),
 });
 
 const updateTransactionSchema = z.object({
   status: z.enum(["pending", "accepted", "washing", "drying", "ready", "completed", "declined"]).optional(),
   total_price: z.number().min(0).optional(),
-  weight: z.number().min(0).optional(),
-  remaining_time: z.number().int().min(0).optional(),
+   weight: z.number().min(0).nullable().optional(),
+   remaining_time: z.number().int().min(0).nullable().optional(),
   drying_time: z.number().int().min(0).optional(),
   payment_status: z.enum(["unpaid", "paid"]).optional(),
   payment_method: z.string().optional(),
@@ -737,7 +754,7 @@ const machineUpdateSchema = z.object({
     try {
       const q = address.toLowerCase().includes("san fernando") ? address : `${address}, San Fernando City, La Union, Philippines`;
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url, { headers: { "User-Agent": "laundry-app/1.0" } });
+      const res = await fetch(url, { headers: { "User-Agent": "laundry-app/1.0" }, signal: AbortSignal.timeout(10000) });
       if (!res.ok) return null;
       const data = await res.json() as any[];
       if (!Array.isArray(data) || data.length === 0) return null;
@@ -750,7 +767,7 @@ const machineUpdateSchema = z.object({
   async function routeDistanceKm(originLat: number, originLon: number, destLat: number, destLon: number): Promise<number | null> {
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${originLon},${originLat};${destLon},${destLat}?overview=false`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
       if (!res.ok) return null;
       const data = await res.json() as any;
       if (!data.routes || !data.routes[0]) return null;
@@ -828,7 +845,7 @@ interface JwtPayload {
 // Rate limiter for login attempts
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX || "10", 10),
   message: { error: "Too many login attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -837,7 +854,7 @@ const loginRateLimiter = rateLimit({
 // General API rate limiter
 const apiRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 500, // 500 requests per minute
+  max: parseInt(process.env.API_RATE_LIMIT_MAX || "1000", 10),
   message: { error: "Too many requests. Please slow down." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -846,7 +863,7 @@ const apiRateLimiter = rateLimit({
 // Rate limiter for public endpoints
 const publicRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // 30 requests per window
+  max: parseInt(process.env.PUBLIC_RATE_LIMIT_MAX || "120", 10),
   message: { error: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -910,9 +927,24 @@ async function startServer() {
 
    const app = express();
 
-   // Trust the first proxy hop in production (Render) so req.ip and rate limiters
-   // see the real client address.
-   if (process.env.NODE_ENV === "production") {
+   // Controlled maintenance mode: keep /api/health available for probes while
+   // returning a retryable 503 for all other traffic.
+   if (process.env.MAINTENANCE_MODE === "true") {
+     app.use((req, res, next) => {
+       if (req.path === "/api/health") return next();
+       res.status(503).set("Retry-After", "120").json(apiResponse(false, undefined, "Service temporarily unavailable for maintenance"));
+     });
+   }
+
+   // Trust proxy configuration. Defaults to one hop in production, but can be
+   // overridden for multi-hop proxies (e.g. Cloudflare -> load balancer).
+   const trustProxyRaw = process.env.TRUST_PROXY;
+   if (trustProxyRaw === "true") {
+     app.set("trust proxy", true);
+   } else if (trustProxyRaw) {
+     const hops = parseInt(trustProxyRaw, 10);
+     if (Number.isFinite(hops) && hops > 0) app.set("trust proxy", hops);
+   } else if (process.env.NODE_ENV === "production") {
      app.set("trust proxy", 1);
    }
 
@@ -1090,16 +1122,27 @@ async function startServer() {
     }
   });
 
-  // Health check (no auth required)
-  app.get("/api/health", (req, res) => {
-    try {
-      // Check database connectivity
-      db.prepare("SELECT 1").get();
-      res.json(apiResponse(true, { status: "ok", database: "connected" }));
-    } catch (error) {
-      res.status(503).json(apiResponse(false, undefined, "Database unavailable"));
-    }
-  });
+   // Health check (no auth required)
+   app.get("/api/health", (req, res) => {
+     try {
+       // Check database connectivity
+       db.prepare("SELECT 1").get();
+       const mem = process.memoryUsage();
+       res.json(apiResponse(true, {
+         status: "ok",
+         database: "connected",
+         maintenance_mode: process.env.MAINTENANCE_MODE === "true",
+         uptime_seconds: Math.round(process.uptime()),
+         memory: {
+           rss_bytes: mem.rss,
+           heap_used_bytes: mem.heapUsed,
+           heap_total_bytes: mem.heapTotal,
+         },
+       }));
+     } catch (error) {
+       res.status(503).json(apiResponse(false, undefined, "Database unavailable"));
+     }
+   });
 
   // ============================================
   // Email Verification (booking flow)
@@ -1112,6 +1155,8 @@ async function startServer() {
       port: parseInt(process.env.SMTP_PORT || "587", 10),
       secure: process.env.SMTP_SECURE === "true",
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      connectionTimeout: 10000,
+      socketTimeout: 10000,
     });
   })();
 
@@ -1622,14 +1667,15 @@ async function startServer() {
   });
 
    // Create walk-in order (admin only - for walk-in/call-in orders)
-   app.post("/api/admin/transactions", requireAuth, async (req, res) => {
-    const result = transactionSchema.safeParse(req.body);
+    app.post("/api/admin/transactions", requireAuth, async (req, res) => {
+     const result = transactionSchema.safeParse(req.body);
 
-    if (!result.success) {
-      return res.status(400).json(
-        apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
-      );
-    }
+     if (!result.success) {
+       console.log("[DEBUG] admin transaction validation errors:", JSON.stringify(result.error.errors));
+       return res.status(400).json(
+         apiResponse(false, undefined, result.error.errors.map((e) => e.message).join(", "))
+       );
+     }
 
     const data = result.data;
     const items = data.items || [];
@@ -3393,7 +3439,7 @@ const pricingUpdateSchema = z.object({
        const lng = parseFloat(String(req.query.lng || ""));
        if (isNaN(lat) || isNaN(lng)) return res.status(400).json(apiResponse(false, undefined, "lat and lng are required"));
        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-       const r = await fetch(url, { headers: { "User-Agent": "laundry-app/1.0" } });
+       const r = await fetch(url, { headers: { "User-Agent": "laundry-app/1.0" }, signal: AbortSignal.timeout(10000) });
        if (!r.ok) return res.status(502).json(apiResponse(false, undefined, "Reverse geocoding failed"));
        const data = await r.json() as any;
        const displayName = data.display_name || "";
@@ -3513,16 +3559,9 @@ const pricingUpdateSchema = z.object({
     });
 
     // Start the server
-    const server = app.listen(PORT, () => {
-    console.log(`
-╔═══════════════════════════════════════════════════╗
-║   Laundry Management Server                       ║
-║   Running on http://localhost:${PORT}             ║
-║   NODE_ENV: ${process.env.NODE_ENV || "(unset -> production)"}  ║
-║   Database: ${DB_NAME}                            ║
-╚═══════════════════════════════════════════════════╝
-    `);
-  });
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server listening on port ${PORT}`);
+    });
 
   // Background task to decrement machine time every second
   const timerInterval = setInterval(() => {
@@ -3615,6 +3654,16 @@ const pricingUpdateSchema = z.object({
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
+
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] Uncaught exception during startup/runtime:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled promise rejection:", reason);
+  process.exit(1);
+});
 
 startServer().catch((err) => {
   console.error("[FATAL] Server failed to start:", err);
