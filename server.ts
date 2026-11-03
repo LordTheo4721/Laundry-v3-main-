@@ -1088,9 +1088,9 @@ async function startServer() {
   if (vite) {
     app.use(vite.middlewares);
   } else {
-    // Production mode - serve static files from dist/
-    const distPath = path.join(__dirname, "dist");
-    app.use(express.static(distPath));
+    // Production mode - serve static files from build/
+    const buildPath = path.join(__dirname, "build");
+    app.use(express.static(buildPath));
   }
 
   // Serve index.html for all non-API routes (SPA support)
@@ -1113,8 +1113,8 @@ async function startServer() {
         const html = await vite.transformIndexHtml(req.path, fs.readFileSync(indexPath, "utf-8"));
         res.send(html);
       } else {
-        // Production mode - serve index.html from dist/
-        const indexPath = path.join(__dirname, "dist", "index.html");
+        // Production mode - serve index.html from build/
+        const indexPath = path.join(__dirname, "build", "index.html");
         res.sendFile(indexPath);
       }
     } catch (e) {

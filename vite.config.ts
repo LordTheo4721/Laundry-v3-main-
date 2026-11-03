@@ -15,7 +15,10 @@ export default defineConfig(({mode}) => {
     '.onrender.com', // Allow all onrender.com subdomains
   ];
   
-  return {
+   return {
+    build: {
+      outDir: 'build',
+    },
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
