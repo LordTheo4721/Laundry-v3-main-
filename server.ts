@@ -1087,11 +1087,15 @@ async function startServer() {
   // Use Vite middleware for dev
   if (vite) {
     app.use(vite.middlewares);
-  } else {
-    // Production mode - serve static files from build/
-    const buildPath = path.join(__dirname, "build");
-    app.use(express.static(buildPath));
-  }
+   } else {
+     // Production mode - serve static files from build/ (fall back to dist/ if absent)
+     const fsSync = require("node:fs");
+     let staticDir = path.join(__dirname, "build");
+     if (!fsSync.existsSync(staticDir)) {
+       staticDir = path.join(__dirname, "dist");
+     }
+     app.use(express.static(staticDir));
+   }
 
   // Serve index.html for all non-API routes (SPA support)
   app.get("*", async (req, res, next) => {
@@ -1113,8 +1117,12 @@ async function startServer() {
         const html = await vite.transformIndexHtml(req.path, fs.readFileSync(indexPath, "utf-8"));
         res.send(html);
       } else {
-        // Production mode - serve index.html from build/
-        const indexPath = path.join(__dirname, "build", "index.html");
+        // Production mode - serve index.html from build/ (fall back to dist/)
+        const fsSync = require("node:fs");
+        let indexPath = path.join(__dirname, "build", "index.html");
+        if (!fsSync.existsSync(indexPath)) {
+          indexPath = path.join(__dirname, "dist", "index.html");
+        }
         res.sendFile(indexPath);
       }
     } catch (e) {
