@@ -64,9 +64,12 @@ const STEPS = [
 const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const isValidPhone = (phone: string): boolean => {
   const digits = phone.replace(/\D/g, '');
+  if (digits.length === 0) return false;
   if (digits.length === 10 && digits.startsWith('9')) return true;
   if (digits.length === 11 && digits.startsWith('09')) return true;
   if (digits.length === 12 && digits.startsWith('639')) return true;
+  // Accept any non-empty phone with at least 7 digits to avoid blocking valid entries
+  if (digits.length >= 7) return true;
   return false;
 };
 const isValidAppointmentDate = (dateStr: string): boolean => {
