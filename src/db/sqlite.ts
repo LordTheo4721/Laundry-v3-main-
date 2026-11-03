@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { Database as DbIface, Statement, RunResult } from "./types";
+import type { Database as DbIface, Statement } from "./types";
 import { translateSql } from "./sql";
 
 export function createSqliteAdapter(dbPath: string): DbIface {

@@ -1,6 +1,6 @@
 import mysql from "mysql2/promise";
 import deasync from "deasync";
-import type { Database as DbIface, Statement, RunResult, DatabaseConfig } from "./types";
+import type { Database as DbIface, Statement, DatabaseConfig } from "./types";
 import { translateSql } from "./sql";
 
 function sync<T>(promise: Promise<T>, timeoutMs = 15000): T {
