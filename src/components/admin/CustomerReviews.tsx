@@ -1,3 +1,5 @@
+// Customer reviews management: listing, replying, and moderation.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Star,

@@ -19,6 +19,7 @@ const MIME_TO_EXTENSIONS: Record<string, string[]> = {
   'image/gif': ['.gif'],
 };
 
+/** Validate that a file's MIME type and extension are allowed and consistent. */
 export function validateFileType(file: FileLike): boolean {
   const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
   if (!ALLOWED_MIME_TYPES.includes(file.type)) return false;
@@ -27,14 +28,17 @@ export function validateFileType(file: FileLike): boolean {
   return (MIME_TO_EXTENSIONS[file.type] || []).includes(ext);
 }
 
+/** Validate that a file's size is within the allowed range. */
 export function validateFileSize(file: FileLike): boolean {
   return file.size > 0 && file.size <= MAX_FILE_SIZE_BYTES;
 }
 
+/** Validate that the number of files is within the allowed limit. */
 export function validateFileCount(files: FileLike[]): boolean {
   return files.length >= 0 && files.length <= MAX_FILES;
 }
 
+/** Validate a batch of review photos, returning validity and error messages. */
 export function validateReviewPhotos(files: FileLike[]): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!validateFileCount(files)) {

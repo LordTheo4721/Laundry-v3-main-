@@ -1,3 +1,6 @@
+// MySQL/MariaDB adapter implementing the Database interface.
+// Wraps mysql2 pool with synchronous helpers via deasync.
+
 import mysql from "mysql2/promise";
 import deasync from "deasync";
 import type { Database as DbIface, Statement, DatabaseConfig } from "./types";
@@ -20,6 +23,10 @@ function sync<T>(promise: Promise<T>, timeoutMs = 15000): T {
   return result as T;
 }
 
+/**
+ * Create a MySQL/MariaDB adapter implementing the Database interface.
+ * @param config Resolved database configuration.
+ */
 export function createMysqlAdapter(config: DatabaseConfig): DbIface {
   const pool = mysql.createPool({
     host: config.host,

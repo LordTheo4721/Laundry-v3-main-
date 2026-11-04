@@ -1,3 +1,5 @@
+// Shared domain types for the laundry application (transactions, reviews, machines, etc.).
+
 // Transaction status types
 export type TransactionStatus = 'pending' | 'accepted' | 'washing' | 'drying' | 'ready' | 'completed' | 'declined';
 
@@ -73,7 +75,7 @@ export interface Transaction {
    reference_number: string;
    customer_name: string;
    customer_phone: string;
-   customer_email?: string;
+    customer_email: string;
    service_type: string;
     quantity: number;
     items: Array<{ service_type: string; quantity: number; unit_price?: number }>;
@@ -81,9 +83,11 @@ export interface Transaction {
     weight: number | null;
     appointment_date: string | null;
     appointment_time: string | null;
-    delivery_method: 'pickup' | 'delivery';
-    address: string | null;
-    delivery_zone_id?: number | null;
+     delivery_method: 'pickup' | 'delivery';
+     address: string | null;
+     branch?: string | null;
+     delivery_branch?: string | null;
+     delivery_zone_id?: number | null;
     delivery_distance_km?: number | null;
     status: TransactionStatus;
    total_price: number;

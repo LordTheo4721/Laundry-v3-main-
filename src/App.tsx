@@ -1,3 +1,5 @@
+// Root application component: routing, global state, and view orchestration.
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Calendar,

@@ -1,3 +1,5 @@
+// Sales reports and analytics dashboard for the admin portal.
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrendingUp,

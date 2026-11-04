@@ -1,7 +1,13 @@
+// SQLite adapter implementing the Database interface via better-sqlite3.
+
 import Database from "better-sqlite3";
 import type { Database as DbIface, Statement } from "./types";
 import { translateSql } from "./sql";
 
+/**
+ * Create a SQLite adapter implementing the Database interface.
+ * @param dbPath Path to the SQLite database file.
+ */
 export function createSqliteAdapter(dbPath: string): DbIface {
   const db = new Database(dbPath);
   try { db.pragma("foreign_keys = ON"); } catch { /* ignore */ }

@@ -1,3 +1,5 @@
+// React error boundary that catches render errors and shows a fallback UI.
+
 import React, { Component } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 

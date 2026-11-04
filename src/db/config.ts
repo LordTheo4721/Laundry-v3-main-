@@ -3,6 +3,11 @@
 
 import type { DatabaseConfig, DatabaseEngine } from "./types";
 
+/**
+ * Read an environment variable, returning `fallback` when unset/empty.
+ * @param name Environment variable name.
+ * @param fallback Value returned when the variable is missing or empty.
+ */
 function env(name: string, fallback?: string): string {
   const v = process.env[name];
   if (v === undefined || v === null || v === "") return fallback ?? "";

@@ -1,3 +1,5 @@
+// Express backend server: API routes, DB init, and static serving.
+
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -86,8 +88,9 @@ function initializeDatabase() {
       weight REAL,
       appointment_date TEXT,
       appointment_time TEXT,
-      delivery_method TEXT,
-      address TEXT,
+       delivery_method TEXT,
+       address TEXT,
+       branch TEXT,
       status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'washing', 'drying', 'ready', 'completed', 'declined')),
       total_price REAL DEFAULT 0,
       payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid')),
@@ -181,8 +184,9 @@ function initializeDatabase() {
    addColumnIfNotExists("transactions", "handwash_proof_image", "TEXT");
    addColumnIfNotExists("transactions", "customer_email", "TEXT");
    addColumnIfNotExists("transactions", "deleted_at", "DATETIME");
-   addColumnIfNotExists("transactions", "delivery_fee", "REAL DEFAULT 0");
-  addColumnIfNotExists("transactions", "payment_method", "TEXT DEFAULT 'cash'");
+    addColumnIfNotExists("transactions", "delivery_fee", "REAL DEFAULT 0");
+    addColumnIfNotExists("transactions", "payment_method", "TEXT DEFAULT 'cash'");
+    addColumnIfNotExists("transactions", "branch", "TEXT");
   addColumnIfNotExists("machines", "status", "TEXT DEFAULT 'available'");
   addColumnIfNotExists("machines", "remaining_time", "INTEGER DEFAULT 0");
   addColumnIfNotExists("machines", "drying_time", "INTEGER DEFAULT 0");
@@ -606,8 +610,9 @@ const transactionSchema = z.object({
   special_instructions: z.string().max(500).optional(),
   appointment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)").optional(),
   appointment_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)").optional(),
-   delivery_method: z.enum(["pickup", "delivery"]).optional(),
-   address: z.string().max(200).optional(),
+    delivery_method: z.enum(["pickup", "delivery"]).optional(),
+    address: z.string().max(200).optional(),
+    branch: z.string().max(100).optional(),
    delivery_zone_id: z.number().int().positive().nullable().optional(),
   payment_status: z.enum(["unpaid", "paid"]).optional(),
   payment_method: z.string().optional(),
@@ -622,7 +627,6 @@ const transactionSchema = z.object({
 
 const updateTransactionSchema = z.object({
   status: z.enum(["pending", "accepted", "washing", "drying", "ready", "completed", "declined"]).optional(),
-  total_price: z.number().min(0).optional(),
    weight: z.number().min(0).nullable().optional(),
    remaining_time: z.number().int().min(0).nullable().optional(),
   drying_time: z.number().int().min(0).optional(),
@@ -797,15 +801,6 @@ const machineUpdateSchema = z.object({
     return { distance_km: Math.round(distance * 100) / 100, fee, destination: dest };
   }
 
- /**
-  * Calculate the total order price including delivery fee based on delivery method
-  */
- function calculateOrderTotal(serviceType: string, quantity: number, deliveryMethod: string): number {
-   const servicePrice = calculatePrice(serviceType, quantity);
-   const deliveryFee = deliveryMethod === 'delivery' ? getDeliveryFee(serviceType) : 0;
-   return servicePrice + deliveryFee;
- }
-
 function generateReferenceNumber(): string {
   // Use timestamp + cryptographically strong random bytes for unpredictability
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -927,14 +922,7 @@ async function startServer() {
 
    const app = express();
 
-   // Controlled maintenance mode: keep /api/health available for probes while
-   // returning a retryable 503 for all other traffic.
-   if (process.env.MAINTENANCE_MODE === "true") {
-     app.use((req, res, next) => {
-       if (req.path === "/api/health") return next();
-       res.status(503).set("Retry-After", "120").json(apiResponse(false, undefined, "Service temporarily unavailable for maintenance"));
-     });
-   }
+
 
    // Trust proxy configuration. Defaults to one hop in production, but can be
    // overridden for multi-hop proxies (e.g. Cloudflare -> load balancer).
@@ -999,7 +987,10 @@ async function startServer() {
   // Ensure uploads directory exists
   const uploadsPath = path.join(__dirname, "uploads");
   try { fs.mkdirSync(uploadsPath, { recursive: true }); } catch { /* ignore */ }
-  // Serve uploaded files statically - require authentication to prevent unauthorized access
+  try { fs.mkdirSync(path.join(uploadsPath, "review-photos"), { recursive: true }); } catch { /* ignore */ }
+  // Serve review photos publicly (for customer reviews)
+  app.use("/uploads/review-photos", express.static(path.join(uploadsPath, "review-photos")));
+  // Serve other uploaded files statically - require authentication to prevent unauthorized access
   app.use("/uploads", requireAuth, express.static(uploadsPath));
 
   // CORS middleware - strict origin validation
@@ -1013,11 +1004,14 @@ async function startServer() {
        // Render domains (explicit production host only)
     ];
     // Allow additional origins from env (comma-separated)
-    const envOrigins = (process.env.ALLOWED_ORIGINS || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    envOrigins.forEach((o) => allowedOrigins.push(o));
+     const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+       .split(',')
+       .map((s) => s.trim())
+       .filter(Boolean)
+       .filter((o) => {
+         try { new URL(o); return true; } catch { return false; }
+       });
+     envOrigins.forEach((o) => allowedOrigins.push(o));
     const origin = req.headers.origin;
     const isAllowed = allowedOrigins.some(o => 
       typeof o === 'string' ? o === origin : o.test(origin || '')
@@ -1118,7 +1112,7 @@ async function startServer() {
         res.send(html);
       } else {
         // Production mode - serve index.html from build/ (fall back to dist/)
-        const fsSync = require("node:fs");
+        const fsSync = fs;
         let indexPath = path.join(__dirname, "build", "index.html");
         if (!fsSync.existsSync(indexPath)) {
           indexPath = path.join(__dirname, "dist", "index.html");
@@ -1147,9 +1141,9 @@ async function startServer() {
            heap_total_bytes: mem.heapTotal,
          },
        }));
-     } catch (error) {
-       res.status(503).json(apiResponse(false, undefined, "Database unavailable"));
-     }
+      } catch (error) {
+        res.status(500).json(apiResponse(false, undefined, "Database unavailable"));
+      }
    });
 
   // ============================================
@@ -1168,46 +1162,56 @@ async function startServer() {
     });
   })();
 
-  app.post("/api/verify-email/send", (req, res) => {
-    try {
-      const email = String(req.body?.email || "").trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return res.status(400).json(apiResponse(false, undefined, "Invalid email"));
-      }
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-       db.prepare("INSERT INTO email_verifications (email, token, expires_at) VALUES (?, ?, ?)").run(email, code, expires);
-      if (emailTransporter) {
-        emailTransporter.sendMail({
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
-          to: email,
-          subject: "Your verification code",
-          text: `Your verification code is: ${code}. It expires in 10 minutes.`,
-        }).catch((e) => console.error("[Email] send failed:", e));
-      } else {
-        console.log(`[Email] Verification code for ${email}: ${code} (SMTP not configured)`);
-      }
-      res.json(apiResponse(true, { sent: true }));
-    } catch (e) {
-      console.error(e);
-      res.status(500).json(apiResponse(false, undefined, "Failed to send verification"));
-    }
-  });
+   app.post("/api/verify-email/send", (req, res) => {
+     try {
+       const email = String(req.body?.email || "").trim();
+       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+         return res.status(400).json(apiResponse(false, undefined, "Invalid email"));
+       }
+       // Per-email rate limiting: max 3 codes per 10 minutes
+       const recent = db.prepare("SELECT COUNT(*) as c FROM email_verifications WHERE email = ? AND created_at >= datetime('now', '-10 minutes')").get(email) as { c: number };
+       if (recent.c >= 3) {
+         return res.status(429).json(apiResponse(false, undefined, "Too many verification requests. Please try again later."));
+       }
+       const code = String(Math.floor(100000 + Math.random() * 900000));
+       const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+       const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        db.prepare("INSERT INTO email_verifications (email, token, expires_at) VALUES (?, ?, ?)").run(email, codeHash, expires);
+       if (emailTransporter) {
+         emailTransporter.sendMail({
+           from: process.env.SMTP_FROM || process.env.SMTP_USER,
+           to: email,
+           subject: "Your verification code",
+           text: `Your verification code is: ${code}. It expires in 10 minutes.`,
+         }).catch((e) => console.error("[Email] send failed:", e));
+       } else {
+         console.log(`[Email] Verification code for ${email}: ${code} (SMTP not configured)`);
+       }
+       res.json(apiResponse(true, { sent: true }));
+     } catch (e) {
+       console.error(e);
+       res.status(500).json(apiResponse(false, undefined, "Failed to send verification"));
+     }
+   });
 
-  app.post("/api/verify-email/confirm", (req, res) => {
-    try {
-      const email = String(req.body?.email || "").trim();
-      const code = String(req.body?.code || "").trim();
-       const row = db.prepare("SELECT * FROM email_verifications WHERE email = ? AND token = ? AND verified = 0 ORDER BY id DESC LIMIT 1").get(email, code) as any;
-      if (!row) return res.status(400).json(apiResponse(false, undefined, "Invalid code"));
-      if (new Date(row.expires_at) < new Date()) return res.status(400).json(apiResponse(false, undefined, "Code expired"));
-      db.prepare("UPDATE email_verifications SET verified = 1 WHERE id = ?").run(row.id);
-      res.json(apiResponse(true, { verified: true }));
-    } catch (e) {
-      console.error(e);
-      res.status(500).json(apiResponse(false, undefined, "Verification failed"));
-    }
-  });
+   app.post("/api/verify-email/confirm", (req, res) => {
+     try {
+       const email = String(req.body?.email || "").trim();
+       const code = String(req.body?.code || "").trim();
+       const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+        const row = db.prepare("SELECT * FROM email_verifications WHERE email = ? AND token = ? AND verified = 0 ORDER BY id DESC LIMIT 1").get(email, codeHash) as any;
+       if (!row) return res.status(400).json(apiResponse(false, undefined, "Invalid code"));
+       if (new Date(row.expires_at) < new Date()) return res.status(400).json(apiResponse(false, undefined, "Code expired"));
+       // Single use: mark verified
+       db.prepare("UPDATE email_verifications SET verified = 1 WHERE id = ?").run(row.id);
+       // Invalidate any other unused codes for this email
+       db.prepare("UPDATE email_verifications SET verified = 1 WHERE email = ? AND id != ? AND verified = 0").run(email, row.id);
+       res.json(apiResponse(true, { verified: true }));
+     } catch (e) {
+       console.error(e);
+       res.status(500).json(apiResponse(false, undefined, "Verification failed"));
+     }
+   });
 
   app.get("/api/verify-email/status", (req, res) => {
     try {
@@ -1224,18 +1228,22 @@ async function startServer() {
   // ============================================
 
   // Helper function to log audit events
-  const logAudit = (adminId: number, action: 'login' | 'logout' | 'password_change' | 'username_change' | 'failed_login', details: string | null, req: express.Request) => {
-    try {
-      const ip = req.ip || req.socket.remoteAddress || 'unknown';
-      const userAgent = req.get('user-agent') || 'unknown';
-      db.prepare(`
-        INSERT INTO audit_logs (admin_id, action, details, ip_address, user_agent)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(adminId, action, details, ip, userAgent);
-    } catch (e) {
-      console.error("[AUDIT] Failed to log audit event:", e);
-    }
-  };
+   const logAudit = (adminId: number | null, action: 'login' | 'logout' | 'password_change' | 'username_change' | 'failed_login', details: string | null, req: express.Request) => {
+     try {
+       // Skip logging for unknown users
+       if (!adminId) return;
+       const admin = db.prepare("SELECT id FROM admin_users WHERE id = ?").get(adminId);
+       if (!admin) return;
+       const ip = req.ip || req.socket.remoteAddress || 'unknown';
+       const userAgent = req.get('user-agent') || 'unknown';
+       db.prepare(`
+         INSERT INTO audit_logs (admin_id, action, details, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?)
+       `).run(adminId, action, details, ip, userAgent);
+     } catch (e) {
+       console.error("[AUDIT] Failed to log audit event:", e);
+     }
+   };
 
   // Admin login
   app.post("/api/admin/login", loginRateLimiter, (req, res) => {
@@ -1486,11 +1494,23 @@ async function startServer() {
     // Sanitize customer inputs to prevent XSS
     const sanitizedCustomerName = sanitizeInput(data.customer_name);
     const sanitizedCustomerPhone = sanitizeInput(data.customer_phone);
-    const sanitizedEmail = data.customer_email ? sanitizeInput(data.customer_email) : undefined;
-    const sanitizedAddress = data.address ? sanitizeInput(data.address) : undefined;
-    const sanitizedInstructions = data.special_instructions ? sanitizeInput(data.special_instructions) : undefined;
-    
-    // Hand wash orders should NOT be assigned to any machine
+     const sanitizedEmail = data.customer_email ? sanitizeInput(data.customer_email) : undefined;
+      const sanitizedAddress = data.address ? sanitizeInput(data.address) : undefined;
+      const sanitizedBranch = data.branch ? sanitizeInput(data.branch) : undefined;
+      // Combine "where are you from" (address) and "branch" (barangay) into a single unified address field
+      const sanitizedCombinedAddress = (sanitizedAddress && sanitizedBranch)
+        ? `${sanitizedAddress}, ${sanitizedBranch}`
+        : sanitizedAddress;
+      const sanitizedInstructions = data.special_instructions ? sanitizeInput(data.special_instructions) : undefined;
+      // Enforce email verification server-side if email verification is required
+     if (sanitizedEmail) {
+       const verifiedRow = db.prepare("SELECT id FROM email_verifications WHERE email = ? AND verified = 1 ORDER BY id DESC LIMIT 1").get(sanitizedEmail);
+       if (!verifiedRow) {
+         return res.status(400).json(apiResponse(false, undefined, "Email not verified"));
+       }
+     }
+     
+     // Hand wash orders should NOT be assigned to any machine
     const isHandWash = data.service_type.toLowerCase().includes('hand wash');
     const machineId = isHandWash ? null : (data.machine_id || null);
 
@@ -1511,18 +1531,18 @@ async function startServer() {
  
      // Resolve delivery fee once (address-based when possible, else fixed pricing fee)
      let resolvedDeliveryFee = 0;
-     if (data.delivery_method === 'delivery') {
-       const firstService = items.length > 0 ? items[0].service_type : data.service_type;
-       if (sanitizedAddress) {
-         const quote = await calculateDeliveryFeeByAddress(sanitizedAddress);
-         resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
-       } else {
-         resolvedDeliveryFee = getDeliveryFee(firstService);
-       }
-     }
- 
-     // Retry logic for reference number collision (max 3 attempts)
-     let transactionId: number | null = null;
+      if (data.delivery_method === 'delivery') {
+        const firstService = items.length > 0 ? items[0].service_type : data.service_type;
+        if (sanitizedCombinedAddress) {
+          const quote = await calculateDeliveryFeeByAddress(sanitizedCombinedAddress);
+          resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
+        } else {
+          resolvedDeliveryFee = getDeliveryFee(firstService);
+        }
+      }
+      
+      // Retry logic for reference number collision (max 3 attempts)
+      let transactionId: number | null = null;
     let reference_number = '';
     let total_price = 0;
     let newTransaction: any = null;
@@ -1570,9 +1590,9 @@ async function startServer() {
             INSERT INTO transactions (
               reference_number, customer_name, customer_phone, customer_email, service_type,
               quantity, special_instructions, appointment_date, appointment_time,
-              delivery_method, address, total_price, delivery_fee, machine_id, payment_method, weight
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               delivery_method, address, branch, total_price, delivery_fee, machine_id, payment_method, weight
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             reference_number,
             sanitizedCustomerName,
@@ -1583,14 +1603,15 @@ async function startServer() {
             sanitizedInstructions || "",
             data.appointment_date || "",
             data.appointment_time || "",
-            data.delivery_method || "",
-            sanitizedAddress || "",
-            total_price,
-            delivery_fee,
-            machineId,
-            data.payment_method || "cash",
-            data.weight || null
-          );
+              data.delivery_method || "",
+              sanitizedCombinedAddress || "",
+              null,
+              total_price,
+              delivery_fee,
+              machineId,
+             data.payment_method || "cash",
+             data.weight || null
+           );
 
         transactionId = Number(insertResult.lastInsertRowid);
 
@@ -1669,9 +1690,9 @@ async function startServer() {
       "SELECT service_type, quantity, unit_price FROM transaction_items WHERE transaction_id = ?"
     ).all(newTransaction.id);
     
-    res.status(201).json(
-      apiResponse(true, { ...newTransaction, items: transactionItems })
-    );
+     res.status(201).json(
+       apiResponse(true, { ...newTransaction, branch: newTransaction.branch ?? null, delivery_branch: newTransaction.branch ?? null, items: transactionItems })
+     );
   });
 
    // Create walk-in order (admin only - for walk-in/call-in orders)
@@ -1692,10 +1713,15 @@ async function startServer() {
     const sanitizedCustomerName = sanitizeInput(data.customer_name);
     const sanitizedCustomerPhone = sanitizeInput(data.customer_phone);
     const sanitizedEmail = data.customer_email ? sanitizeInput(data.customer_email) : undefined;
-    const sanitizedAddress = data.address ? sanitizeInput(data.address) : undefined;
-    const sanitizedInstructions = data.special_instructions ? sanitizeInput(data.special_instructions) : undefined;
-    
-    // For walk-in orders, default to today's date
+      const sanitizedAddress = data.address ? sanitizeInput(data.address) : undefined;
+      const sanitizedBranch = data.branch ? sanitizeInput(data.branch) : undefined;
+      // Combine "where are you from" (address) and "branch" (barangay) into a single unified address field
+      const sanitizedCombinedAddress = (sanitizedAddress && sanitizedBranch)
+        ? `${sanitizedAddress}, ${sanitizedBranch}`
+        : sanitizedAddress;
+      const sanitizedInstructions = data.special_instructions ? sanitizeInput(data.special_instructions) : undefined;
+      
+      // For walk-in orders, default to today's date
     const today = new Date().toISOString().split('T')[0];
 
     const isHandWash = items.length > 0
@@ -1728,16 +1754,16 @@ async function startServer() {
      let resolvedDeliveryFee = 0;
      if (data.delivery_method === 'delivery') {
        const firstService = items.length > 0 ? items[0].service_type : data.service_type;
-       if (sanitizedAddress) {
-         const quote = await calculateDeliveryFeeByAddress(sanitizedAddress);
-         resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
-       } else {
-         resolvedDeliveryFee = getDeliveryFee(firstService);
-       }
-     }
- 
-     // Retry logic for reference number collision (max 3 attempts)
-     let newTransactionId: number | null = null;
+        if (sanitizedCombinedAddress) {
+          const quote = await calculateDeliveryFeeByAddress(sanitizedCombinedAddress);
+          resolvedDeliveryFee = quote.destination ? quote.fee : getDeliveryFee(firstService);
+        } else {
+          resolvedDeliveryFee = getDeliveryFee(firstService);
+        }
+      }
+  
+      // Retry logic for reference number collision (max 3 attempts)
+      let newTransactionId: number | null = null;
     let reference_number = '';
     let total_price = 0;
     let newTransaction: any = null;
@@ -1788,9 +1814,9 @@ async function startServer() {
             INSERT INTO transactions (
               reference_number, customer_name, customer_phone, customer_email, service_type,
               quantity, special_instructions, appointment_date, appointment_time,
-              delivery_method, address, total_price, delivery_fee, status, payment_status, machine_id, payment_method, weight
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               delivery_method, address, branch, total_price, delivery_fee, status, payment_status, machine_id, payment_method, weight
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `);
 
           const insertResult = stmt.run(
@@ -1803,11 +1829,12 @@ async function startServer() {
             sanitizedInstructions || "",
             data.appointment_date || today,
             data.appointment_time || "",
-            data.delivery_method || "",
-            sanitizedAddress || "",
-            total_price,
-            delivery_fee,
-            initialStatus,
+              data.delivery_method || "",
+              sanitizedCombinedAddress || "",
+              null,
+              total_price,
+              delivery_fee,
+              initialStatus,
             data.payment_status || "unpaid",
             assignedMachineId,
             data.payment_method || "cash",
@@ -1917,9 +1944,9 @@ async function startServer() {
       return res.status(500).json(apiResponse(false, undefined, "Failed to create walk-in order"));
     }
     
-    res.status(201).json(
-      apiResponse(true, newTransaction)
-    );
+     res.status(201).json(
+       apiResponse(true, { ...newTransaction, branch: newTransaction.branch ?? null, delivery_branch: newTransaction.branch ?? null })
+     );
   });
 
    // Reschedule appointment (public - for tracking)
@@ -1948,10 +1975,13 @@ async function startServer() {
       }
  
       try {
-       const transaction = db.prepare("SELECT id FROM transactions WHERE reference_number = ?").get(reference) as { id: number } | undefined;
-       if (!transaction) {
-         return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
-       }
+        const transaction = db.prepare("SELECT id, status FROM transactions WHERE reference_number = ?").get(reference) as { id: number; status: string } | undefined;
+        if (!transaction) {
+          return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
+        }
+        if (['completed', 'declined', 'ready'].includes(transaction.status)) {
+          return res.status(400).json(apiResponse(false, undefined, "Cannot reschedule a " + transaction.status + " order"));
+        }
 
        const fields: string[] = [];
        const values: (string | number | null)[] = [];
@@ -1982,9 +2012,9 @@ async function startServer() {
     const { reference } = req.params;
 
     try {
-       const transaction = db
-         .prepare("SELECT * FROM transactions WHERE reference_number = ? OR customer_phone = ? OR customer_email = ?")
-         .get(reference, reference, reference);
+        const transaction = db
+          .prepare("SELECT id, reference_number, customer_name, service_type, quantity, special_instructions, appointment_date, appointment_time, delivery_method, address, branch, status, total_price, payment_status, payment_method, machine_id, created_at, updated_at FROM transactions WHERE reference_number = ?")
+          .get(reference);
 
       if (!transaction) {
         return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
@@ -2019,7 +2049,7 @@ async function startServer() {
          reviewWithReplies = { ...review, replies };
        }
 
-       res.json(apiResponse(true, { ...transaction, items, review: reviewWithReplies }));
+        res.json(apiResponse(true, { ...transaction, branch: transaction.branch ?? null, delivery_branch: transaction.branch ?? null, items, review: reviewWithReplies }));
     } catch (error) {
       console.error("[API] Transaction lookup error:", error);
       res.status(500).json(apiResponse(false, undefined, "Internal server error"));
@@ -2362,10 +2392,12 @@ async function startServer() {
         }, {} as Record<number, any[]>);
       }
 
-      const transactionsWithItems = transactions.map((t: any) => ({
-        ...t,
-        items: itemsByTransaction[t.id] || []
-      }));
+       const transactionsWithItems = transactions.map((t: any) => ({
+         ...t,
+         branch: t.branch ?? null,
+         delivery_branch: t.branch ?? null,
+         items: itemsByTransaction[t.id] || []
+       }));
 
       const meta: PaginationMeta = {
         page,
@@ -2404,8 +2436,23 @@ async function startServer() {
         return res.status(404).json(apiResponse(false, undefined, "Transaction not found"));
       }
 
-      const updates = result.data;
-      const startsDrying = updates.status === 'drying' && current.status === 'washing' && current.machine_id !== null;
+     const updates = result.data;
+     // Enforce allowed status transitions
+     if (updates.status !== undefined && updates.status !== current.status) {
+       const allowed: Record<string, string[]> = {
+         pending: ['accepted', 'declined'],
+         accepted: ['washing', 'declined'],
+         washing: ['drying', 'declined'],
+         drying: ['ready', 'declined'],
+         ready: ['completed'],
+         completed: [],
+         declined: [],
+       };
+       if (!(allowed[current.status] || []).includes(updates.status)) {
+         return res.status(400).json(apiResponse(false, undefined, "Invalid status transition"));
+       }
+     }
+     const startsDrying = updates.status === 'drying' && current.status === 'washing' && current.machine_id !== null;
       const marksReady = updates.status === 'ready' && current.status === 'drying' && current.machine_id !== null;
 
       if (startsDrying || marksReady) {
@@ -2446,9 +2493,14 @@ async function startServer() {
         fields.push("status = ?");
         values.push(updates.status);
       }
-      if (updates.total_price !== undefined) {
+      // Recompute total_price server-side from service, quantity, and delivery fee
+      {
+        const recomputedServiceType = updates.service_type || current.service_type;
+        const recomputedQuantity = current.quantity || 1;
+        const recomputedDeliveryFee = current.delivery_fee || 0;
+        const recomputedTotalPrice = calculatePrice(recomputedServiceType, recomputedQuantity) + recomputedDeliveryFee;
         fields.push("total_price = ?");
-        values.push(updates.total_price);
+        values.push(recomputedTotalPrice);
       }
       if (updates.weight !== undefined) {
         fields.push("weight = ?");
@@ -2506,56 +2558,60 @@ async function startServer() {
       fields.push("updated_at = CURRENT_TIMESTAMP");
       values.push(id);
 
-      // Build the query - field names are from hardcoded allowlist above, values are parameterized
-      const fieldSet = fields.join(", ");
-      const query = "UPDATE transactions SET " + fieldSet + " WHERE id = ?";
-      db.prepare(query).run(...values);
+      // Wrap transaction and machine updates in a database transaction
+      const runUpdate = db.transaction(() => {
+        // Build the query - field names are from hardcoded allowlist above, values are parameterized
+        const fieldSet = fields.join(", ");
+        const query = "UPDATE transactions SET " + fieldSet + " WHERE id = ?";
+        db.prepare(query).run(...values);
 
-      // Handle machine status changes based on transaction status updates
-      const newStatus = updates.status !== undefined ? updates.status : current.status;
+        // Handle machine status changes based on transaction status updates
+        const newStatus = updates.status !== undefined ? updates.status : current.status;
 
-      if (updates.status === 'washing' && current.machine_id) {
-        const machine = db.prepare("SELECT remaining_time FROM machines WHERE id = ?").get(current.machine_id) as { remaining_time: number } | undefined;
-        const requestedWashTime = updates.remaining_time ?? machine?.remaining_time ?? 0;
-        const washTime = requestedWashTime > 0 ? requestedWashTime : 2700;
-        db.prepare(`
-          UPDATE machines
-          SET status = 'in-use',
-              remaining_time = ?,
-              drying_time = 0,
-              current_transaction_id = ?
-          WHERE id = ?
-        `).run(washTime, id, current.machine_id);
-      }
+        if (updates.status === 'washing' && current.machine_id) {
+          const machine = db.prepare("SELECT remaining_time FROM machines WHERE id = ?").get(current.machine_id) as { remaining_time: number } | undefined;
+          const requestedWashTime = updates.remaining_time ?? machine?.remaining_time ?? 0;
+          const washTime = requestedWashTime > 0 ? requestedWashTime : 2700;
+          db.prepare(`
+            UPDATE machines
+            SET status = 'in-use',
+                remaining_time = ?,
+                drying_time = 0,
+                current_transaction_id = ?
+            WHERE id = ?
+          `).run(washTime, id, current.machine_id);
+        }
 
-      if (startsDrying) {
-        db.prepare("UPDATE machines SET status = 'in-use', remaining_time = 0, drying_time = ?, current_transaction_id = ? WHERE id = ?").run(updates.drying_time ?? 2700, id, current.machine_id);
-      }
-      if (marksReady) {
-        db.prepare("UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?").run(current.machine_id);
-      }
-
-      // If status is being changed to completed or declined, reset the machine
-      if (newStatus === 'completed' || newStatus === 'declined') {
-        if (current.machine_id) {
+        if (startsDrying) {
+          db.prepare("UPDATE machines SET status = 'in-use', remaining_time = 0, drying_time = ?, current_transaction_id = ? WHERE id = ?").run(updates.drying_time ?? 2700, id, current.machine_id);
+        }
+        if (marksReady) {
           db.prepare("UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?").run(current.machine_id);
         }
-      }
 
-      // Update machine status when machine_id is assigned
-      if (updates.machine_id !== undefined && updates.machine_id !== null && !isHandWash) {
-        db.prepare("UPDATE machines SET status = 'in-use', current_transaction_id = ? WHERE id = ?").run(id, updates.machine_id);
-      }
-      // If machine_id is being set to NULL, update the previous machine status back to available
-      if (updates.machine_id !== undefined && updates.machine_id === null && !isHandWash) {
-        if (prevMachineId) {
-          db.prepare("UPDATE machines SET status = 'available', current_transaction_id = NULL WHERE id = ?").run(prevMachineId);
+        // If status is being changed to completed or declined, reset the machine
+        if (newStatus === 'completed' || newStatus === 'declined') {
+          if (current.machine_id) {
+            db.prepare("UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?").run(current.machine_id);
+          }
         }
-      }
-      // If machine_id is unchanged but status changed to completed/declined, reset the machine
-      if (updates.machine_id === undefined && (newStatus === 'completed' || newStatus === 'declined') && current.machine_id) {
-        db.prepare("UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?").run(current.machine_id);
-      }
+
+        // Update machine status when machine_id is assigned
+        if (updates.machine_id !== undefined && updates.machine_id !== null && !isHandWash) {
+          db.prepare("UPDATE machines SET status = 'in-use', current_transaction_id = ? WHERE id = ?").run(id, updates.machine_id);
+        }
+        // If machine_id is being set to NULL, update the previous machine status back to available
+        if (updates.machine_id !== undefined && updates.machine_id === null && !isHandWash) {
+          if (prevMachineId) {
+            db.prepare("UPDATE machines SET status = 'available', current_transaction_id = NULL WHERE id = ?").run(prevMachineId);
+          }
+        }
+        // If machine_id is unchanged but status changed to completed/declined, reset the machine
+        if (updates.machine_id === undefined && (newStatus === 'completed' || newStatus === 'declined') && current.machine_id) {
+          db.prepare("UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?").run(current.machine_id);
+        }
+      });
+      runUpdate();
 
       console.log(`[API] Transaction ${id} updated`);
 
@@ -3063,23 +3119,23 @@ const pricingUpdateSchema = z.object({
       filterParams.push(serviceType);
     }
 
-    switch (range) {
-      case "today":
-        dateFilter = `AND date(created_at) = date('now')`;
-        prevDateFilter = `AND date(created_at) = date('now', '-1 day')`;
-        break;
-      case "week":
-        dateFilter = `AND created_at >= date('now', '-7 days')`;
-        prevDateFilter = `AND created_at >= date('now', '-14 days') AND created_at < date('now', '-7 days')`;
-        break;
-      case "month":
-        dateFilter = `AND created_at >= date('now', '-30 days')`;
-        prevDateFilter = `AND created_at >= date('now', '-60 days') AND created_at < date('now', '-30 days')`;
-        break;
-      default:
-        dateFilter = "";
-        prevDateFilter = "";
-    }
+     switch (range) {
+       case "today":
+         dateFilter = `AND date(created_at, '+8 hours') = date('now', '+8 hours')`;
+         prevDateFilter = `AND date(created_at, '+8 hours') = date('now', '+8 hours', '-1 day')`;
+         break;
+       case "week":
+         dateFilter = `AND created_at >= date('now', '+8 hours', '-7 days')`;
+         prevDateFilter = `AND created_at >= date('now', '+8 hours', '-14 days') AND created_at < date('now', '+8 hours', '-7 days')`;
+         break;
+       case "month":
+         dateFilter = `AND created_at >= date('now', '+8 hours', '-30 days')`;
+         prevDateFilter = `AND created_at >= date('now', '+8 hours', '-60 days') AND created_at < date('now', '+8 hours', '-30 days')`;
+         break;
+       default:
+         dateFilter = "";
+         prevDateFilter = "";
+     }
 
     try {
       // Get basic stats
@@ -3101,14 +3157,14 @@ const pricingUpdateSchema = z.object({
       // Get daily sales with walk-in vs booking breakdown
       const dailySalesAll = db
         .prepare(
-          "SELECT date(created_at) as date, COUNT(*) as count, COALESCE(SUM(total_price), 0) as total, SUM(CASE WHEN delivery_method = 'pickup' THEN 1 ELSE 0 END) as walk_in_count, SUM(CASE WHEN delivery_method = 'delivery' THEN 1 ELSE 0 END) as booking_count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY date(created_at) ORDER BY date DESC LIMIT ? OFFSET ?"
+           "SELECT date(created_at, '+8 hours') as date, COUNT(*) as count, COALESCE(SUM(total_price), 0) as total, SUM(CASE WHEN delivery_method = 'pickup' THEN 1 ELSE 0 END) as walk_in_count, SUM(CASE WHEN delivery_method = 'delivery' THEN 1 ELSE 0 END) as booking_count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY date(created_at, '+8 hours') ORDER BY date DESC LIMIT ? OFFSET ?"
         )
         .all(...filterParams, limit, (page - 1) * limit);
 
       // Revenue trend includes completed orders only, matching total_sales.
       const dailySales = db
         .prepare(
-          "SELECT date(created_at) as date, COUNT(*) as count, COALESCE(SUM(total_price), 0) as total FROM transactions WHERE status = 'completed' AND deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY date(created_at) ORDER BY date(created_at) ASC"
+           "SELECT date(created_at, '+8 hours') as date, COUNT(*) as count, COALESCE(SUM(total_price), 0) as total FROM transactions WHERE status = 'completed' AND deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY date(created_at, '+8 hours') ORDER BY date(created_at, '+8 hours') ASC"
         )
         .all(...filterParams);
 
@@ -3146,14 +3202,14 @@ const pricingUpdateSchema = z.object({
       // Get peak hours (orders by hour of day)
       const peakHours = db
         .prepare(
-          "SELECT CAST(strftime('%H', created_at) as INTEGER) as hour, COUNT(*) as count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY hour ORDER BY hour"
+           "SELECT CAST(strftime('%H', created_at, '+8 hours') as INTEGER) as hour, COUNT(*) as count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY hour ORDER BY hour"
         )
         .all(...filterParams);
 
       // Get peak days (orders by day of week)
       const peakDays = db
         .prepare(
-          "SELECT CASE CAST(strftime('%w', created_at) as INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END as day, COUNT(*) as count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY day ORDER BY count DESC"
+           "SELECT CASE CAST(strftime('%w', created_at, '+8 hours') as INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END as day, COUNT(*) as count FROM transactions WHERE deleted_at IS NULL " + dateFilter + " " + serviceFilter + " GROUP BY day ORDER BY count DESC"
         )
         .all(...filterParams);
 
@@ -3418,10 +3474,22 @@ const pricingUpdateSchema = z.object({
    });
 
    // Admin: update origin
-   app.put("/api/delivery/origin", requireAuth, async (req, res) => {
-     try {
-       const { name, address, latitude, longitude } = req.body || {};
-       const origin = getDeliveryOrigin();
+    app.put("/api/delivery/origin", requireAuth, async (req, res) => {
+      try {
+        const { name, address, latitude, longitude } = req.body || {};
+        if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+          return res.status(400).json(apiResponse(false, undefined, "name must be a non-empty string"));
+        }
+        if (address !== undefined && address !== null && (typeof address !== 'string' || !address.trim())) {
+          return res.status(400).json(apiResponse(false, undefined, "address must be a non-empty string"));
+        }
+        if (latitude !== undefined && (typeof latitude !== 'number' || latitude < -90 || latitude > 90)) {
+          return res.status(400).json(apiResponse(false, undefined, "latitude must be between -90 and 90"));
+        }
+        if (longitude !== undefined && (typeof longitude !== 'number' || longitude < -180 || longitude > 180)) {
+          return res.status(400).json(apiResponse(false, undefined, "longitude must be between -180 and 180"));
+        }
+        const origin = getDeliveryOrigin();
        let lat = latitude;
        let lon = longitude;
        if ((lat === undefined || lon === undefined) && (address || origin.address)) {
@@ -3512,11 +3580,15 @@ const pricingUpdateSchema = z.object({
        res.status(500).json(apiResponse(false, undefined, "Failed to get delivery zones"));
      }
    });
-   app.post("/api/delivery/zones", requireAuth, (req, res) => {
-     try {
-       const { name, latitude, longitude, is_active } = req.body || {};
-       if (!name) return res.status(400).json(apiResponse(false, undefined, "name is required"));
-       const info = db.prepare("INSERT INTO delivery_zones (name, latitude, longitude, is_active) VALUES (?, ?, ?, ?)").run(name, latitude || 0, longitude || 0, is_active ?? 1);
+    app.post("/api/delivery/zones", requireAuth, (req, res) => {
+      try {
+        const { name, latitude, longitude, is_active } = req.body || {};
+        if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json(apiResponse(false, undefined, "name is required"));
+        const lat = latitude === undefined ? 0 : latitude;
+        const lon = longitude === undefined ? 0 : longitude;
+        if (typeof lat !== 'number' || lat < -90 || lat > 90) return res.status(400).json(apiResponse(false, undefined, "latitude must be between -90 and 90"));
+        if (typeof lon !== 'number' || lon < -180 || lon > 180) return res.status(400).json(apiResponse(false, undefined, "longitude must be between -180 and 180"));
+        const info = db.prepare("INSERT INTO delivery_zones (name, latitude, longitude, is_active) VALUES (?, ?, ?, ?)").run(name, lat, lon, is_active ?? 1);
        const zone = db.prepare("SELECT * FROM delivery_zones WHERE id = ?").get(info.lastInsertRowid);
        res.json(apiResponse(true, zone));
      } catch (error) {
@@ -3540,10 +3612,17 @@ const pricingUpdateSchema = z.object({
        res.status(500).json(apiResponse(false, undefined, "Failed to get delivery bands"));
      }
    });
-   app.post("/api/delivery/bands", requireAuth, (req, res) => {
-     try {
-       const { min_km, max_km, fee, sort_order } = req.body || {};
-       const info = db.prepare("INSERT INTO delivery_bands (min_km, max_km, fee, sort_order) VALUES (?, ?, ?, ?)").run(min_km ?? 0, max_km ?? 9999, fee ?? 0, sort_order ?? 0);
+    app.post("/api/delivery/bands", requireAuth, (req, res) => {
+      try {
+        const { min_km, max_km, fee, sort_order } = req.body || {};
+        const min = min_km === undefined ? 0 : min_km;
+        const max = max_km === undefined ? 9999 : max_km;
+        const f = fee === undefined ? 0 : fee;
+        if (typeof min !== 'number' || min < 0) return res.status(400).json(apiResponse(false, undefined, "min_km must be a non-negative number"));
+        if (typeof max !== 'number' || max < 0) return res.status(400).json(apiResponse(false, undefined, "max_km must be a non-negative number"));
+        if (max <= min) return res.status(400).json(apiResponse(false, undefined, "max_km must be greater than min_km"));
+        if (typeof f !== 'number' || f < 0) return res.status(400).json(apiResponse(false, undefined, "fee must be a non-negative number"));
+        const info = db.prepare("INSERT INTO delivery_bands (min_km, max_km, fee, sort_order) VALUES (?, ?, ?, ?)").run(min, max, f, sort_order ?? 0);
        const band = db.prepare("SELECT * FROM delivery_bands WHERE id = ?").get(info.lastInsertRowid);
        res.json(apiResponse(true, band));
      } catch (error) {
@@ -3567,8 +3646,14 @@ const pricingUpdateSchema = z.object({
     });
 
     // Start the server
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server listening on port ${PORT}`);
+    const server = app.listen(PORT, () => {
+      console.log(`
+╔═══════════════════════════════════════════════════╗
+║   Laundry Management Server                       ║
+║   Running on http://localhost:${PORT}             ║
+║   Database: ${DB_NAME}                            ║
+╚═══════════════════════════════════════════════════╝
+    `);
     });
 
   // Background task to decrement machine time every second
@@ -3604,8 +3689,9 @@ const pricingUpdateSchema = z.object({
                 THEN MAX(0, drying_time - 1)
                 ELSE drying_time
               END
-          WHERE status = 'in-use'
-        `).run();
+           WHERE status = 'in-use'
+             AND (current_transaction_id IS NULL OR current_transaction_id IN (SELECT id FROM transactions WHERE status IN ('washing', 'drying')))
+         `).run();
 
         // Process machines that just completed their cycle
         if (machinesCompleting.length > 0) {
@@ -3633,7 +3719,7 @@ const pricingUpdateSchema = z.object({
             }
 
             // Update transaction status
-            db.prepare("UPDATE transactions SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(transactionId);
+            db.prepare("UPDATE transactions SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('washing', 'drying')").run(transactionId);
             db.prepare(
               "UPDATE machines SET status = 'available', remaining_time = 0, drying_time = 0, current_transaction_id = NULL WHERE id = ?"
             ).run(machineId);

@@ -198,7 +198,6 @@ Watch stdout for `[DB]`, Vite errors, and the startup banner. The banner now pri
 ## 6. Hostinger-specific notes
 
 See `docs/HOSTINGER_DEPLOYMENT.md` for full steps. Quick points:
-
 - Shared hosting: upload `dist/` contents only, never the source tree.
 - `.htaccess` is shipped in `dist/` (copied from `public/.htaccess`).
 - File permissions: dirs `755`, files `644`.
@@ -207,6 +206,12 @@ See `docs/HOSTINGER_DEPLOYMENT.md` for full steps. Quick points:
 - PHP errors: disabled via `.htaccess` (`display_errors off`).
 - Server logs (Node hosting): hPanel → Node.js → Logs; look for
   `ADMIN_PASSWORD`/`JWT_SECRET` boot errors and `better-sqlite3` module errors.
+- **"package.json file not found" build failure:** the Node.js app's
+  **Application root** is pointed at a folder without `package.json`
+  (e.g. `build/`, `dist/`, `src/`, `public/`, or `/`). Set Application root
+  to the project root (the folder containing `package.json`) in
+  hPanel → Node.js → your app, then redeploy. Verify locally with
+  `npm run build` (must print `✓ built in ...`).
 
 ## 7. Verification checklist
 

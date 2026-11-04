@@ -1,3 +1,5 @@
+// Admin dashboard: orders, machines, queue, and overview management.
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
@@ -53,9 +55,11 @@ import AdminNavbar from './AdminNavbar';
 import { calculatePrice, calculateGrandTotalWithMap, calculatePriceWithFallback, FALLBACK_PRICING } from '../../utils/pricing';
 import { getDeliveryFee } from '../../utils/sharedPricing';
 import { calculateDeliveryFeeFromConfig } from '../../utils/sharedPricing';
+import { BRANCHES } from '../../utils/branches';
+import { getDeliveryFeeByBranch, TIER4_DEFAULT_FEE, TIER4_MIN_FEE, TIER4_MAX_FEE, DELIVERY_TIERS } from '../../utils/deliveryTiers';
 import type { Pricing, PriceHistory, Review, Transaction, Machine, Stats, TransactionStatus, PaginationMeta, DeliveryConfig } from '../../types';
 import type { PricingConfig } from '../../utils/sharedPricing';
-import { getTransactions, getTransactionsPage, getStats, getMachines, getReviews, getPricing, getPriceHistory, verifyAdminToken, updateMachine as apiUpdateMachine, resetMachines as apiResetMachines, deleteTransaction as apiDeleteTransaction, deleteCustomer as apiDeleteCustomer, updatePricing as apiUpdatePricing, createWalkInOrder, getAuthFetchOptions, deletePriceHistory, parseResponseJson } from '../../utils/api';
+import { getTransactionsPage, getStats, getMachines, getReviews, getPricing, getPriceHistory, verifyAdminToken, updateMachine as apiUpdateMachine, resetMachines as apiResetMachines, deleteTransaction as apiDeleteTransaction, deleteCustomer as apiDeleteCustomer, updatePricing as apiUpdatePricing, createWalkInOrder, getAuthFetchOptions, deletePriceHistory, parseResponseJson } from '../../utils/api';
 import { useToast } from './Toast';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75];
@@ -129,6 +133,7 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
     special_instructions: '',
     delivery_method: 'pickup' as 'pickup' | 'delivery',
     address: '',
+    branch: '',
     delivery_zone_id: null as number | null,
   });
   const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig | null>(null);
@@ -318,16 +323,21 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
           setConfirmationLoading(false);
           return;
         }
-        const body = showMultiItem
-          ? {
-              ...formData,
-              items: items.map(item => ({
-                service_type: item.service_type,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-              })),
-            }
-          : formData;
+         const combinedAddress = formData.delivery_method === 'delivery' && formData.branch
+           ? `${formData.address.trim()}, ${formData.branch}`
+           : formData.address;
+         const body = showMultiItem
+           ? {
+               ...formData,
+               address: combinedAddress,
+               branch: undefined,
+               items: items.map(item => ({
+                 service_type: item.service_type,
+                 quantity: item.quantity,
+                 unit_price: item.unit_price,
+               })),
+             }
+           : { ...formData, address: combinedAddress, branch: undefined };
    
         const res = await fetch('/api/transactions', {
            method: 'POST',
@@ -362,10 +372,11 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
       service_type: 'Wash & Fold (Clothes)',
       quantity: 1,
       special_instructions: '',
-       delivery_method: 'pickup' as 'pickup' | 'delivery',
-       address: '',
-       delivery_zone_id: null,
-     });
+        delivery_method: 'pickup' as 'pickup' | 'delivery',
+        address: '',
+        branch: '',
+        delivery_zone_id: null,
+      });
      setItems([]);
     setShowMultiItem(false);
     setCreatedTransaction(null);
@@ -733,21 +744,33 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
             </div>
           </div>
 
-          {formData.delivery_method === 'delivery' && (
-            <div className="space-y-4">
-              <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                <MapPin className="w-4 h-4" /> Where are you?
-              </label>
-              <textarea
-                required
-                className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
-                placeholder="123 Bubble Lane..."
-                rows={3}
-                value={formData.address}
-                onChange={e => setFormData({...formData, address: e.target.value})}
-              />
-            </div>
-          )}
+           {formData.delivery_method === 'delivery' && (
+             <div className="space-y-4">
+               <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                 <MapPin className="w-4 h-4" /> Barangay
+               </label>
+               <select
+                 className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                 value={formData.branch}
+                 onChange={e => setFormData({...formData, branch: e.target.value})}
+                 aria-label="Barangay"
+               >
+                 <option value="">Select barangay</option>
+                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+               </select>
+               <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                 <MapPin className="w-4 h-4" /> Where are you?
+               </label>
+               <textarea
+                 required
+                 className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                 placeholder="123 Bubble Lane..."
+                 rows={3}
+                 value={formData.address}
+                 onChange={e => setFormData({...formData, address: e.target.value})}
+               />
+             </div>
+           )}
 
           <button
             disabled={loading}
@@ -1005,11 +1028,19 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     appointment_time: '',
     delivery_method: 'pickup' as 'pickup' | 'delivery',
     address: '',
+    branch: '',
     payment_status: 'unpaid' as 'unpaid' | 'paid',
     delivery_zone_id: null as number | null,
   });
   const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig | null>(null);
   const [walkInDeliveryQuote, setWalkInDeliveryQuote] = useState<{ distance_km: number; fee: number } | null>(null);
+  const [tier4Fee, setTier4Fee] = useState<number>(() => {
+    if (typeof window === 'undefined') return TIER4_DEFAULT_FEE;
+    const v = Number(localStorage.getItem('tier4Fee'));
+    return Number.isFinite(v) ? Math.min(TIER4_MAX_FEE, Math.max(TIER4_MIN_FEE, v)) : TIER4_DEFAULT_FEE;
+  });
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resettingMachines, setResettingMachines] = useState(false);
   useEffect(() => {
     fetch('/api/delivery/config', { credentials: 'include' })
       .then(res => res.json())
@@ -1017,7 +1048,10 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    if (walkInForm.delivery_method !== 'delivery' || !walkInForm.address || walkInForm.address.trim().length < 5) {
+    const combinedAddress = walkInForm.delivery_method === 'delivery'
+      ? (walkInForm.branch ? `${walkInForm.address.trim()}, ${walkInForm.branch}` : walkInForm.address.trim())
+      : '';
+    if (walkInForm.delivery_method !== 'delivery' || !combinedAddress || combinedAddress.trim().length < 5) {
       setWalkInDeliveryQuote(null);
       return;
     }
@@ -1025,7 +1059,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     fetch('/api/delivery/quote', {
       method: 'POST',
       ...getAuthFetchOptions(),
-      body: JSON.stringify({ address: walkInForm.address }),
+      body: JSON.stringify({ address: combinedAddress }),
       signal: controller.signal,
     })
       .then(res => res.json())
@@ -1035,7 +1069,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       })
       .catch(() => { if (!controller.signal.aborted) setWalkInDeliveryQuote(null); });
     return () => controller.abort();
-  }, [walkInForm.delivery_method, walkInForm.address]);
+  }, [walkInForm.delivery_method, walkInForm.address, walkInForm.branch]);
   const [walkInLoading, setWalkInLoading] = useState(false);
   const [walkInDeliveryCoords, setWalkInDeliveryCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [walkInQuoting, setWalkInQuoting] = useState(false);
@@ -1591,8 +1625,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     } else {
       serviceTotal = calculatePriceWithFallback(walkInForm.service_type, walkInForm.quantity, pricingMap);
     }
-    const firstServiceType = showMultiItem ? (walkInItems.length > 0 ? walkInItems[0].service_type : walkInForm.service_type) : walkInForm.service_type;
-    const deliveryFee = walkInForm.delivery_method === 'delivery' ? getDeliveryFee(pricingMap.get(firstServiceType) || FALLBACK_PRICING[firstServiceType]) : 0;
+    const deliveryFee = walkInForm.delivery_method === 'delivery' ? (walkInDeliveryQuote?.fee || 0) : 0;
     return serviceTotal + deliveryFee;
   };
 
@@ -1683,10 +1716,11 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       special_instructions: '',
       appointment_date: '',
       appointment_time: '',
-       delivery_method: 'pickup',
-       address: '',
-       payment_status: 'unpaid',
-       delivery_zone_id: null,
+        delivery_method: 'pickup',
+        address: '',
+        branch: '',
+        payment_status: 'unpaid',
+        delivery_zone_id: null,
      });
     setWalkInItems([{ service_type: 'Wash & Fold (Clothes)', quantity: 1, unit_price: 0 }]);
     setShowMultiItem(false);
@@ -1739,16 +1773,21 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
           return;
         }
       }
-      const body = showMultiItem && walkInItems.length > 0
-        ? {
-            ...walkInForm,
-            items: walkInItems.map(item => ({
-              service_type: item.service_type,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-            })),
-          }
-        : walkInForm;
+       const combinedAddress = walkInForm.delivery_method === 'delivery' && walkInForm.branch
+         ? `${walkInForm.address.trim()}, ${walkInForm.branch}`
+         : walkInForm.address;
+       const body = showMultiItem && walkInItems.length > 0
+         ? {
+             ...walkInForm,
+             address: combinedAddress,
+             branch: undefined,
+             items: walkInItems.map(item => ({
+               service_type: item.service_type,
+               quantity: item.quantity,
+               unit_price: item.unit_price,
+             })),
+           }
+         : { ...walkInForm, address: combinedAddress, branch: undefined };
 
       const result = await createWalkInOrder(body);
       setSubmittedWalkInItems(walkInItems);
@@ -2218,8 +2257,32 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                   <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
                 </button>
                 <h1 className="text-3xl font-extrabold text-zinc-900 tracking-tighter">Pricing Management</h1>
-                <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mt-1">Manage service prices and view price history</p>
-              </div>
+                 <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mt-1">Manage service prices and view price history</p>
+               </div>
+
+               {/* Delivery tier management */}
+               <div className="bg-white rounded-3xl border-4 border-zinc-50 shadow-xl mb-8 p-6">
+                 <h2 className="text-xl font-black text-zinc-900 mb-2">Delivery Fee Tiers (by Barangay)</h2>
+                 <p className="text-xs text-zinc-500 mb-4">Tier 1: ₱39 (0-2 km) · Tier 2: ₱49 (2-4 km) · Tier 3: ₱65 (4-7 km) · Tier 4: configurable (7+ km)</p>
+                 <div className="flex items-center gap-3">
+                   <label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Tier 4 Fee (₱{TIER4_MIN_FEE}-{TIER4_MAX_FEE})</label>
+                   <input
+                     type="number"
+                     min={TIER4_MIN_FEE}
+                     max={TIER4_MAX_FEE}
+                     value={tier4Fee}
+                     onChange={e => {
+                       const v = Number(e.target.value);
+                       if (Number.isFinite(v)) {
+                         const clamped = Math.min(TIER4_MAX_FEE, Math.max(TIER4_MIN_FEE, v));
+                         setTier4Fee(clamped);
+                         localStorage.setItem('tier4Fee', String(clamped));
+                       }
+                     }}
+                     className="w-24 p-2 bg-zinc-50 border-2 border-zinc-200 rounded-xl font-bold"
+                   />
+                 </div>
+               </div>
               
               {/* Current Pricing */}
                 <div className="bg-white rounded-3xl border-4 border-zinc-50 shadow-xl mb-8">
@@ -2264,10 +2327,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                                       <span>•</span>
                                       <span>₱{p.per_kg_price}/kg</span>
                                     </>
-                                  )}
-                                   <span>•</span>
-                                   <span className="text-blue-600 font-bold">Delivery: ₱{p.delivery_fee}</span>
-                                </div>
+                                   )}
+                                 </div>
                               </div>
                             </div>
                             <button
@@ -2360,17 +2421,17 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                         </div>
                       )}
                       
-                       <div className="space-y-2 pt-4 border-t border-zinc-100">
-                          <label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Delivery Fee (₱)</label>
-                          <input
-                            type="number"
-                            name="delivery_fee"
-                            defaultValue={editingPricing.delivery_fee}
-                            className="w-full p-3 bg-zinc-50 border-2 border-zinc-200 rounded-xl font-bold"
-                            min="0"
-                          />
-                          <p className="text-[10px] text-zinc-400">Default is ₱50. Only applies to Pick-up & Delivery orders. Drop-off orders have ₱0 delivery fee.</p>
-                        </div>
+                        <div className="space-y-2 pt-4 border-t border-zinc-100">
+                           <label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Delivery Fee (₱)</label>
+                           <input
+                             type="number"
+                             name="delivery_fee"
+                             defaultValue={editingPricing.delivery_fee}
+                             className="w-full p-3 bg-zinc-50 border-2 border-zinc-200 rounded-xl font-bold"
+                             min="0"
+                           />
+                           <p className="text-[10px] text-zinc-400">Applies to Pick-up & Delivery orders. Drop-off orders have ₱0 delivery fee.</p>
+                         </div>
 
                        <div className="flex gap-4 pt-4 border-t border-zinc-100">
                          <button
@@ -2841,17 +2902,29 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                                <p className="text-sm font-bold text-rose-600">{walkInQuoteError}</p>
                              )}
 
-                              <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                                <MapPin className="w-4 h-4" /> Where are you?
-                              </label>
-                              <textarea
-                                required
-                                value={walkInForm.address}
-                                onChange={e => setWalkInForm({...walkInForm, address: e.target.value})}
-                                className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
-                                placeholder="123 Bubble Lane..."
-                                rows={3}
-                              />
+                               <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                                 <MapPin className="w-4 h-4" /> Barangay
+                               </label>
+                               <select
+                                 className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                                 value={walkInForm.branch}
+                                 onChange={e => setWalkInForm({...walkInForm, branch: e.target.value})}
+                                 aria-label="Barangay"
+                               >
+                                 <option value="">Select barangay</option>
+                                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                               </select>
+                               <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                                 <MapPin className="w-4 h-4" /> Where are you?
+                               </label>
+                               <textarea
+                                 required
+                                 value={walkInForm.address}
+                                 onChange={e => setWalkInForm({...walkInForm, address: e.target.value})}
+                                 className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                                 placeholder="123 Bubble Lane..."
+                                 rows={3}
+                               />
                             </div>
                          )}
                         <div className="space-y-3">
@@ -3352,19 +3425,47 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                 </div>
               ))}
             </div>
-          <div className="mt-4 flex justify-end">
-            <button
-                  onClick={async () => {
-                if (confirm('Reset all machines to default state?')) {
-                  await apiResetMachines();
-                  await fetchData();
-                }
-              }}
-              className="px-2 py-1 bg-rose-500/20 text-rose-500 rounded hover:bg-rose-500/30 transition-colors text-[10px] font-black uppercase"
-            >
-              RESET MACHINES
-            </button>
-          </div>
+           <div className="mt-4 flex justify-end">
+             <button
+                   onClick={() => setShowResetConfirm(true)}
+               className="px-2 py-1 bg-rose-500/20 text-rose-500 rounded hover:bg-rose-500/30 transition-colors text-[10px] font-black uppercase"
+             >
+               RESET MACHINES
+             </button>
+           </div>
+           {showResetConfirm && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+               <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+                 <h2 className="text-xl font-black text-zinc-900 mb-2">Reset Machines?</h2>
+                 <p className="text-zinc-500 font-medium mb-6">This will reset all machines to their default state. This action cannot be undone.</p>
+                 <div className="flex gap-3">
+                   <button
+                     onClick={async () => {
+                       setResettingMachines(true);
+                       try {
+                         await apiResetMachines();
+                         await fetchData();
+                       } finally {
+                         setResettingMachines(false);
+                         setShowResetConfirm(false);
+                       }
+                     }}
+                     disabled={resettingMachines}
+                     className="flex-1 py-3 bg-rose-500 text-white rounded-2xl font-black hover:bg-rose-600 transition-all disabled:opacity-50"
+                   >
+                     {resettingMachines ? 'Resetting...' : 'Confirm Reset'}
+                   </button>
+                   <button
+                     onClick={() => setShowResetConfirm(false)}
+                     disabled={resettingMachines}
+                     className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-2xl font-black hover:bg-zinc-200 transition-all disabled:opacity-50"
+                   >
+                     Cancel
+                   </button>
+                 </div>
+               </div>
+             </div>
+           )}
         </div>
 
         {/* Search and Transactions Table */}

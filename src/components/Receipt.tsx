@@ -1,3 +1,5 @@
+// Printable receipt component for a completed transaction.
+
 import React from 'react';
 
 type TransactionStatus = 'pending' | 'accepted' | 'washing' | 'drying' | 'ready' | 'completed' | 'declined';
@@ -7,7 +9,7 @@ interface Transaction {
   reference_number: string;
   customer_name: string;
   customer_phone: string;
-  customer_email?: string;
+   customer_email: string;
   service_type: string;
   quantity: number;
   items: Array<{ service_type: string; quantity: number; unit_price?: number }>;
@@ -15,8 +17,9 @@ interface Transaction {
   weight: number | null;
   appointment_date: string | null;
   appointment_time: string | null;
-  delivery_method: 'pickup' | 'delivery';
-  address: string | null;
+   delivery_method: 'pickup' | 'delivery';
+   address: string | null;
+   branch?: string | null;
   status: TransactionStatus;
   total_price: number;
   delivery_fee: number;
@@ -97,7 +100,8 @@ export const Receipt: React.FC<ReceiptProps> = ({ transaction, type }) => {
           <p className="text-xs font-bold">{transaction.customer_name}</p>
           <p className="text-[10px] text-zinc-500">{transaction.customer_phone}</p>
           {transaction.customer_email && <p className="text-[10px] text-zinc-500">{transaction.customer_email}</p>}
-          {transaction.address && <p className="text-[10px] text-zinc-500">{transaction.address}</p>}
+           {transaction.address && <p className="text-[10px] text-zinc-500">{transaction.address}</p>}
+           {transaction.branch && <p className="text-[10px] text-zinc-500">Barangay: {transaction.branch}</p>}
         </div>
         <div className="bg-zinc-50 rounded-lg px-3 py-2">
           <p className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold mb-0.5">Service</p>

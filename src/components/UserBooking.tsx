@@ -1,3 +1,5 @@
+// Customer booking flow: service selection, scheduling, and submission.
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -9,6 +11,8 @@ import { useToast } from './admin/Toast';
 import { Receipt, printReceipt } from './Receipt';
 import { calculatePriceWithFallback, FALLBACK_PRICING } from '../utils/pricing';
 import { getDeliveryFee } from '../utils/sharedPricing';
+import { BRANCHES } from '../utils/branches';
+import { getDeliveryFeeByBranch, TIER4_DEFAULT_FEE } from '../utils/deliveryTiers';
 import type { Transaction } from '../types';
 
 import type { PricingConfig } from '../utils/pricing';
@@ -37,10 +41,11 @@ interface FormData {
   special_instructions: string;
   appointment_date: string;
   appointment_time: string;
-  delivery_method: 'pickup' | 'delivery';
-  address: string;
-  delivery_zone_id: number | null;
-}
+   delivery_method: 'pickup' | 'delivery';
+   address: string;
+   branch: string;
+   delivery_zone_id: number | null;
+ }
 
 const initialFormData: FormData = {
   customer_name: '',
@@ -50,9 +55,10 @@ const initialFormData: FormData = {
   appointment_date: '',
   appointment_time: '',
   delivery_method: 'pickup',
-  address: '',
-  delivery_zone_id: null,
-};
+   address: '',
+   branch: '',
+   delivery_zone_id: null,
+ };
 
 const STEPS = [
   { id: 1, label: 'Your Details' },
@@ -139,6 +145,7 @@ const UserBooking = () => {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [dynamicPricing, setDynamicPricing] = useState<Record<string, any>>({});
+  const [pricingError, setPricingError] = useState<string | null>(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
 
@@ -151,15 +158,21 @@ const UserBooking = () => {
           const map: Record<string, any> = {};
           data.data.forEach((p: any) => { map[p.service_type] = p; });
           setDynamicPricing(map);
+          setPricingError(null);
+        } else {
+          setPricingError(data.error || 'Failed to load pricing');
         }
       })
-      .catch(() => {});
+      .catch(() => { setPricingError('Failed to load pricing'); });
   }, []);
   const [confirmationLoading, setConfirmationLoading] = useState(false);
 
   // Quote delivery fee by address when delivery is selected
   useEffect(() => {
-    if (formData.delivery_method !== 'delivery' || !formData.address.trim()) {
+    const combinedAddress = formData.delivery_method === 'delivery'
+      ? (formData.branch ? `${formData.address.trim()}, ${formData.branch}` : formData.address.trim())
+      : '';
+    if (formData.delivery_method !== 'delivery' || !combinedAddress) {
       setDeliveryFee(0);
       return;
     }
@@ -170,7 +183,7 @@ const UserBooking = () => {
         const res = await fetch('/api/delivery/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: formData.address }),
+          body: JSON.stringify({ address: combinedAddress }),
         });
         const data = await res.json();
         if (!cancelled && data.success && data.data) {
@@ -194,7 +207,7 @@ const UserBooking = () => {
       }
     }, 600);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [formData.delivery_method, formData.address, dynamicPricing]);
+  }, [formData.delivery_method, formData.address, formData.branch, dynamicPricing]);
   const [bookedTransaction, setBookedTransaction] = useState<Transaction | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -325,10 +338,19 @@ const UserBooking = () => {
   };
 
   const handleConfirmOrder = async () => {
+    if (formData.customer_email.trim() && !emailVerified) {
+      addToast({ type: 'error', message: 'Please verify your email before booking' });
+      return;
+    }
     setConfirmationLoading(true);
     try {
+      const combinedAddress = formData.delivery_method === 'delivery' && formData.branch
+        ? `${formData.address.trim()}, ${formData.branch}`
+        : formData.address;
       const body = {
         ...formData,
+        address: combinedAddress,
+        branch: undefined,
         service_type: LAUNDRY_SERVICE,
         items: items.map(it => ({
           service_type: it.service_type,
@@ -420,7 +442,7 @@ const UserBooking = () => {
               </div>
             )}
             <div className="flex justify-between items-center">
-              <p className="text-zinc-500 font-medium">Total quantity: {bookedTransaction.quantity} load(s)</p>
+              <p className="text-zinc-500 font-medium">Total quantity: {bookedTransaction.quantity} bag(s)</p>
               <p className="font-bold text-amber-600 text-sm">Pricing pending admin review</p>
             </div>
             {bookedTransaction.special_instructions && (
@@ -668,7 +690,7 @@ const UserBooking = () => {
                 </div>
                 <div className="bg-amber-50 p-4 rounded-2xl border-2 border-amber-100">
                   <p className="text-sm text-amber-700 font-medium">
-                    Total laundry quantity: <span className="font-black">{totalQuantity} load(s)</span>. Estimated total: <span className="font-black">₱{grandTotal.toFixed(2)}</span> (final pricing pending admin review).
+                    Total laundry quantity: <span className="font-black">{totalQuantity} bag(s)</span>. Estimated total: <span className="font-black">₱{grandTotal.toFixed(2)}</span> (final pricing pending admin review).
                   </p>
                 </div>
               </motion.div>
@@ -732,18 +754,28 @@ const UserBooking = () => {
                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
 
 
-                      <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4" /> Where are you?</label>
-                      <textarea
-                        className={`w-full p-5 bg-zinc-50 border-4 rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg ${formErrors.address ? 'border-rose-500' : 'border-transparent'}`}
-                        placeholder="123 Bubble Lane..."
-                        rows={3}
-                        value={formData.address}
-                        onChange={e => { updateFormData({ address: e.target.value }); if (formErrors.address) setFormErrors(p => ({ ...p, address: '' })); }}
-                        aria-label="Delivery address"
-                        aria-invalid={!!formErrors.address}
-                      />
-                      {formErrors.address && <p className="text-[10px] text-rose-600 font-bold mt-1">{formErrors.address}</p>}
-                  </motion.div>
+                        <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4" /> Barangay</label>
+                        <select
+                          className="w-full p-5 bg-zinc-50 border-4 border-transparent rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                          value={formData.branch}
+                          onChange={e => updateFormData({ branch: e.target.value })}
+                          aria-label="Barangay"
+                        >
+                          <option value="">Select branch</option>
+                          {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                       <label className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4" /> Where are you?</label>
+                       <textarea
+                         className={`w-full p-5 bg-zinc-50 border-4 rounded-3xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold text-lg ${formErrors.address ? 'border-rose-500' : 'border-transparent'}`}
+                         placeholder="123 Bubble Lane..."
+                         rows={3}
+                         value={formData.address}
+                         onChange={e => { updateFormData({ address: e.target.value }); if (formErrors.address) setFormErrors(p => ({ ...p, address: '' })); }}
+                         aria-label="Delivery address"
+                         aria-invalid={!!formErrors.address}
+                       />
+                        {formErrors.address && <p className="text-[10px] text-rose-600 font-bold mt-1">{formErrors.address}</p>}
+                   </motion.div>
                 )}
 
                 <div className="space-y-3">
@@ -804,8 +836,9 @@ const UserBooking = () => {
                     <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900">{formData.delivery_method === 'delivery' ? 'Pick-up & Delivery' : 'Drop-off'}</span></div>
                      {formData.delivery_method === 'delivery' && (
                        <>
-                          <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
-                           <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
+                           <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
+                           {formData.branch && <div className="flex justify-between"><span className="text-zinc-500">Barangay</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.branch}</span></div>}
+                            <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
 
 
                        </>
@@ -821,10 +854,10 @@ const UserBooking = () => {
                 )}
 
                 <div className="bg-blue-50 rounded-2xl p-4 sm:p-5 border-2 border-blue-100">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm font-black text-blue-900 uppercase tracking-widest">Total Amount</p>
-                    <p className="text-2xl font-black text-amber-600">Pending admin review</p>
-                  </div>
+                   <div className="flex justify-between items-center">
+                     <p className="text-sm font-black text-blue-900 uppercase tracking-widest">Service Selected</p>
+                     <p className="text-2xl font-black text-amber-600">Pending admin review</p>
+                   </div>
                 </div>
               </motion.div>
             )}
@@ -919,8 +952,9 @@ const UserBooking = () => {
                     <div className="flex justify-between"><span className="text-zinc-500">Method</span><span className="font-bold text-zinc-900">{formData.delivery_method === 'delivery' ? 'Pick-up & Delivery' : 'Drop-off'}</span></div>
                      {formData.delivery_method === 'delivery' && (
                        <>
-                          <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
-                           <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
+                           <div className="flex justify-between"><span className="text-zinc-500">Address</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.address}</span></div>
+                           {formData.branch && <div className="flex justify-between"><span className="text-zinc-500">Barangay</span><span className="font-bold text-zinc-900 text-right max-w-[65%] break-words">{formData.branch}</span></div>}
+                            <div className="flex justify-between"><span className="text-zinc-500">Delivery Fee{deliveryQuoteLoading ? ' (quoting...)' : ''}</span><span className="font-bold text-emerald-600">₱{deliveryFee.toFixed(2)}</span></div>
 
 
                        </>
@@ -929,10 +963,10 @@ const UserBooking = () => {
                 </div>
 
                 <div className="bg-blue-50 rounded-2xl p-4 sm:p-5 border-2 border-blue-100">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm font-black text-blue-900 uppercase tracking-widest">Total Amount</p>
-                    <p className="text-2xl font-black text-amber-600">Pending admin review</p>
-                  </div>
+                   <div className="flex justify-between items-center">
+                     <p className="text-sm font-black text-blue-900 uppercase tracking-widest">Service Selected</p>
+                     <p className="text-2xl font-black text-amber-600">Pending admin review</p>
+                   </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-zinc-100">

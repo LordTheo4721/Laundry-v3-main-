@@ -31,6 +31,12 @@ the API will not work. For a fully working site use option B.
 
 ## B. Hostinger Cloud / Node.js hosting — full app
 
+0. **Application root (critical):** In hPanel → Node.js → your app, set
+   **Application root** to the folder that contains `package.json` (the project
+   root). Do NOT point it at `build/`, `dist/`, `src/`, or `public/` — those
+   folders have no `package.json`, which is exactly what causes the
+   "package.json file not found" build failure. If you uploaded a zip of the
+   repo, the root is the extracted folder (e.g. `laundry-v3-main`), not `/`.
 1. Build & start commands (set in hPanel):
    - Build: `npm install && npm run build`
    - Start: `npm start` (runs `npx tsx server.ts`)

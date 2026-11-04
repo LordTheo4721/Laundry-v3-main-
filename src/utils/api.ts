@@ -1,11 +1,13 @@
+// Central API client for the laundry app.
+// Wraps fetch calls to backend endpoints with auth headers and response parsing.
+
 import type { Transaction, Machine, Stats, SalesData, Customer, Review, ReviewReply, Pricing, PriceHistory, PaginationMeta } from '../types';
-import { fetchWithRetry, SERVICE_UNAVAILABLE_MESSAGE } from './httpRetry';
-export * from './httpRetry';
 
 export const API_BASE = '/api';
 
 // For cookie-based auth, we don't need to manually add Authorization header
 // The httpOnly cookie is sent automatically with credentials: 'include'
+/** Build default auth headers (cookie-based auth; no manual token). */
 export const getAuthHeaders = (): HeadersInit => {
   return { 'Content-Type': 'application/json' };
 };
@@ -35,12 +37,6 @@ const extractData = async <T>(res: Response): Promise<T> => {
   }
 
   if (!res.ok) {
-    if (res.status === 503) {
-      const serverMessage = typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
-        ? json.error
-        : SERVICE_UNAVAILABLE_MESSAGE;
-      throw new Error(`${serverMessage} (HTTP 503)`);
-    }
     const serverMessage = typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
       ? json.error
       : 'Request failed';
@@ -71,12 +67,6 @@ const extractDataWithMeta = async <T>(res: Response): Promise<{ data: T; meta: P
   }
 
   if (!res.ok) {
-    if (res.status === 503) {
-      const serverMessage = typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
-        ? json.error
-        : SERVICE_UNAVAILABLE_MESSAGE;
-      throw new Error(`${serverMessage} (HTTP 503)`);
-    }
     const serverMessage = typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
       ? json.error
       : 'Request failed';
@@ -94,17 +84,17 @@ const extractDataWithMeta = async <T>(res: Response): Promise<{ data: T; meta: P
 };
 
 export const getPublicReviews = async (): Promise<Review[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/reviews/public`);
+  const res = await fetch(`${API_BASE}/reviews/public`);
   return extractData<Review[]>(res);
 };
 
 export const getMachines = async (): Promise<Machine[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/machines`);
+  const res = await fetch(`${API_BASE}/machines`);
   return extractData<Machine[]>(res);
 };
 
 export const trackTransaction = async (referenceNumber: string): Promise<Transaction> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions/track/${encodeURIComponent(referenceNumber)}`);
+  const res = await fetch(`${API_BASE}/transactions/track/${encodeURIComponent(referenceNumber)}`);
   return extractData<Transaction>(res);
 };
 
@@ -115,7 +105,7 @@ export const createReview = async (transactionId: number, rating: number, commen
   if (comment) formData.append('comment', comment);
   (photos || []).forEach((file) => formData.append('photos', file));
 
-  const res = await fetchWithRetry(`${API_BASE}/reviews`, {
+  const res = await fetch(`${API_BASE}/reviews`, {
     method: 'POST',
     body: formData,
     // Do NOT set Content-Type; browser sets multipart boundary
@@ -135,7 +125,7 @@ export const createReview = async (transactionId: number, rating: number, commen
 };
 
 export const createTransaction = async (data: Omit<Transaction, 'id' | 'created_at'>): Promise<Transaction> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions`, {
+  const res = await fetch(`${API_BASE}/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -144,7 +134,7 @@ export const createTransaction = async (data: Omit<Transaction, 'id' | 'created_
 };
 
 export const createWalkInOrder = async (data: any): Promise<Transaction> => {
-  const res = await fetchWithRetry(`${API_BASE}/admin/transactions`, {
+  const res = await fetch(`${API_BASE}/admin/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -158,7 +148,7 @@ export const createWalkInOrder = async (data: any): Promise<Transaction> => {
 };
 
 export const adminLogin = async (username: string, password: string): Promise<{ token: string; user: { id: number; username: string; role: string; last_login: string | null } }> => {
-  const res = await fetchWithRetry(`${API_BASE}/admin/login`, {
+  const res = await fetch(`${API_BASE}/admin/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -169,7 +159,7 @@ export const adminLogin = async (username: string, password: string): Promise<{ 
 
 export const verifyAdminToken = async (): Promise<{ valid: boolean }> => {
    try {
-     const res = await fetchWithRetry(`${API_BASE}/admin/verify`, {
+     const res = await fetch(`${API_BASE}/admin/verify`, {
        ...getAuthFetchOptions(),
      });
      if (!res.ok) return { valid: false };
@@ -181,7 +171,7 @@ export const verifyAdminToken = async (): Promise<{ valid: boolean }> => {
  };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions?limit=100`, {
+  const res = await fetch(`${API_BASE}/transactions?limit=100`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Transaction[]>(res);
@@ -201,7 +191,7 @@ export const getTransactionsPage = async (
   if (params.search && params.search.trim()) {
     query.set('search', params.search.trim());
   }
-  const res = await fetchWithRetry(`${API_BASE}/transactions?${query.toString()}`, {
+  const res = await fetch(`${API_BASE}/transactions?${query.toString()}`, {
     ...getAuthFetchOptions(),
   });
   const { data, meta } = await extractDataWithMeta<Transaction[]>(res);
@@ -209,7 +199,7 @@ export const getTransactionsPage = async (
 };
 
 export const getStats = async (): Promise<Stats> => {
-  const res = await fetchWithRetry(`${API_BASE}/stats`, {
+  const res = await fetch(`${API_BASE}/stats`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Stats>(res);
@@ -220,14 +210,14 @@ export const getSalesData = async (range: string, serviceType?: string): Promise
   // Request the server maximum so long ranges are not silently truncated.
   const params = new URLSearchParams({ range, limit: '100' });
   if (serviceType) params.set('service_type', serviceType);
-  const res = await fetchWithRetry(`${API_BASE}/sales?${params.toString()}`, {
+  const res = await fetch(`${API_BASE}/sales?${params.toString()}`, {
     ...getAuthFetchOptions(),
   });
   return extractData<SalesData>(res);
 };
 
 export const getWalkInOrders = async (): Promise<Transaction[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions?delivery_method=pickup&limit=100`, {
+  const res = await fetch(`${API_BASE}/transactions?delivery_method=pickup&limit=100`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Transaction[]>(res);
@@ -240,7 +230,7 @@ export const getCustomers = async (params?: { page?: number; limit?: number }): 
     page: page.toString(),
     limit: limit.toString(),
   });
-  const res = await fetchWithRetry(`${API_BASE}/customers?${queryParams}`, {
+  const res = await fetch(`${API_BASE}/customers?${queryParams}`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Customer[]>(res);
@@ -262,7 +252,7 @@ export const getCustomersPage = async (
   if (params.search && params.search.trim()) {
     queryParams.set('search', params.search.trim());
   }
-  const res = await fetchWithRetry(`${API_BASE}/customers?${queryParams.toString()}`, {
+  const res = await fetch(`${API_BASE}/customers?${queryParams.toString()}`, {
     ...getAuthFetchOptions(),
   });
   const { data, meta } = await extractDataWithMeta<Customer[]>(res);
@@ -270,7 +260,7 @@ export const getCustomersPage = async (
 };
 
 export const deleteCustomer = async (phone: string): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/customers/${encodeURIComponent(phone)}`, {
+  const res = await fetch(`${API_BASE}/customers/${encodeURIComponent(phone)}`, {
     method: 'DELETE',
     ...getAuthFetchOptions(),
   });
@@ -281,7 +271,7 @@ export const deleteCustomer = async (phone: string): Promise<void> => {
 };
 
 export const updateTransaction = async (id: number, status: string): Promise<Transaction> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions/${id}`, {
+  const res = await fetch(`${API_BASE}/transactions/${id}`, {
     method: 'PATCH',
     ...getAuthFetchOptions(),
     body: JSON.stringify({ status }),
@@ -293,7 +283,7 @@ export const updateMachine = async (id: number, status: string, remainingTime?: 
   const body: Record<string, unknown> = { status };
   if (remainingTime !== undefined) body.remaining_time = remainingTime;
   
-  const res = await fetchWithRetry(`${API_BASE}/machines/${id}`, {
+  const res = await fetch(`${API_BASE}/machines/${id}`, {
     method: 'PATCH',
     ...getAuthFetchOptions(),
     body: JSON.stringify(body),
@@ -302,7 +292,7 @@ export const updateMachine = async (id: number, status: string, remainingTime?: 
 };
 
 export const resetMachines = async (): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/machines/reset`, {
+  const res = await fetch(`${API_BASE}/machines/reset`, {
     method: 'POST',
     ...getAuthFetchOptions(),
   });
@@ -313,7 +303,7 @@ export const resetMachines = async (): Promise<void> => {
 };
 
 export const deleteTransaction = async (id: number): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/transactions/${id}`, {
+  const res = await fetch(`${API_BASE}/transactions/${id}`, {
     method: 'DELETE',
     ...getAuthFetchOptions(),
   });
@@ -324,7 +314,7 @@ export const deleteTransaction = async (id: number): Promise<void> => {
 };
 
 export const getReviews = async (): Promise<Review[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/reviews`, {
+  const res = await fetch(`${API_BASE}/reviews`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Review[]>(res);
@@ -333,14 +323,14 @@ export const getReviews = async (): Promise<Review[]> => {
 // --- Review replies ---
 
 export const getReviewReplies = async (reviewId: number): Promise<ReviewReply[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/reviews/${reviewId}/replies`, {
+  const res = await fetch(`${API_BASE}/reviews/${reviewId}/replies`, {
     ...getAuthFetchOptions(),
   });
   return extractData<ReviewReply[]>(res);
 };
 
 export const createReviewReply = async (reviewId: number, message: string): Promise<ReviewReply> => {
-  const res = await fetchWithRetry(`${API_BASE}/reviews/${reviewId}/replies`, {
+  const res = await fetch(`${API_BASE}/reviews/${reviewId}/replies`, {
     method: 'POST',
     ...getAuthFetchOptions(),
     body: JSON.stringify({ message }),
@@ -353,7 +343,7 @@ export const createReviewReply = async (reviewId: number, message: string): Prom
 };
 
 export const updateReviewReply = async (replyId: number, message: string): Promise<ReviewReply> => {
-  const res = await fetchWithRetry(`${API_BASE}/replies/${replyId}`, {
+  const res = await fetch(`${API_BASE}/replies/${replyId}`, {
     method: 'PATCH',
     ...getAuthFetchOptions(),
     body: JSON.stringify({ message }),
@@ -366,7 +356,7 @@ export const updateReviewReply = async (replyId: number, message: string): Promi
 };
 
 export const deleteReviewReply = async (replyId: number): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/replies/${replyId}`, {
+  const res = await fetch(`${API_BASE}/replies/${replyId}`, {
     method: 'DELETE',
     ...getAuthFetchOptions(),
   });
@@ -377,26 +367,26 @@ export const deleteReviewReply = async (replyId: number): Promise<void> => {
 };
 
 export const getPricing = async (): Promise<Pricing[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/pricing`, {
+  const res = await fetch(`${API_BASE}/pricing`, {
     ...getAuthFetchOptions(),
   });
   return extractData<Pricing[]>(res);
 };
 
 export const getPublicPricing = async (): Promise<Pricing[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/pricing/public`);
+  const res = await fetch(`${API_BASE}/pricing/public`);
   return extractData<Pricing[]>(res);
 };
 
 export const getPriceHistory = async (): Promise<PriceHistory[]> => {
-  const res = await fetchWithRetry(`${API_BASE}/pricing/history`, {
+  const res = await fetch(`${API_BASE}/pricing/history`, {
     ...getAuthFetchOptions(),
   });
   return extractData<PriceHistory[]>(res);
 };
 
 export const deletePriceHistory = async (): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/pricing/history`, {
+  const res = await fetch(`${API_BASE}/pricing/history`, {
     method: 'DELETE',
     ...getAuthFetchOptions(),
   });
@@ -407,7 +397,7 @@ export const deletePriceHistory = async (): Promise<void> => {
 };
 
 export const updatePricing = async (serviceType: string, data: Partial<Pricing>): Promise<void> => {
-  const res = await fetchWithRetry(`${API_BASE}/pricing/${encodeURIComponent(serviceType)}`, {
+  const res = await fetch(`${API_BASE}/pricing/${encodeURIComponent(serviceType)}`, {
     method: 'PATCH',
     ...getAuthFetchOptions(),
     body: JSON.stringify(data),
