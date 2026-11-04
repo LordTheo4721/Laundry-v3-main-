@@ -1143,11 +1143,11 @@ async function startServer() {
         const html = await vite.transformIndexHtml(req.path, fs.readFileSync(indexPath, "utf-8"));
         res.send(html);
        } else {
-        // Production mode - serve index.html from build/ (fall back to dist/)
+        // Production mode - serve index.html from dist/ (fall back to build/)
         const fsSync = fs;
-        let indexPath = path.join(__dirname, "build", "index.html");
+        let indexPath = path.join(__dirname, "dist", "index.html");
         if (!fsSync.existsSync(indexPath)) {
-          indexPath = path.join(__dirname, "dist", "index.html");
+          indexPath = path.join(__dirname, "build", "index.html");
         }
         if (!fsSync.existsSync(indexPath)) {
           // API-only deployment: no frontend bundle present.
@@ -1159,7 +1159,6 @@ async function startServer() {
       next(e);
     }
   });
-
    // Health check (no auth required)
    app.get("/api/health", (req, res) => {
      try {
