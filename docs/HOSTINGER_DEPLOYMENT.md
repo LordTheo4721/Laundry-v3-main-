@@ -56,7 +56,8 @@ the API will not work. For a fully working site use option B.
     DB_PORT=3306
     DB_USER=<mysql-user>
     DB_PASSWORD=<mysql-password>
-    DB_DATABASE=<mysql-database>
+    DB_DATABASE=<mysql-database>  # DB_NAME is also accepted for the MySQL database name
+    # Frontend build (separate deployment): VITE_API_URL=https://api.happywashlaundry.online
     DB_SSL=false
     DB_POOL_SIZE=10
     MACHINE_DEFAULT_TIME=2700

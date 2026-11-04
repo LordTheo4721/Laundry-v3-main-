@@ -7,6 +7,8 @@
  * replace history entries and expose the guard helpers used by the router.
  */
 
+import { API_BASE } from './api';
+
 /** Key the client uses to remember the admin JWT between reloads. */
 export const ADMIN_TOKEN_KEY = 'admin_token';
 
@@ -73,7 +75,7 @@ export const replaceHistoryEntry = (hash: string): void => {
  */
 export const logoutAdmin = async (): Promise<void> => {
   try {
-    await fetch('/api/admin/logout', {
+    await fetch(`${API_BASE}/admin/logout`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

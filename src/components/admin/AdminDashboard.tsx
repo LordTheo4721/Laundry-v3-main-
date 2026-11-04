@@ -59,7 +59,7 @@ import { BRANCHES } from '../../utils/branches';
 import { getDeliveryFeeByBranch, TIER4_DEFAULT_FEE, TIER4_MIN_FEE, TIER4_MAX_FEE, DELIVERY_TIERS } from '../../utils/deliveryTiers';
 import type { Pricing, PriceHistory, Review, Transaction, Machine, Stats, TransactionStatus, PaginationMeta, DeliveryConfig } from '../../types';
 import type { PricingConfig } from '../../utils/sharedPricing';
-import { getTransactionsPage, getStats, getMachines, getReviews, getPricing, getPriceHistory, verifyAdminToken, updateMachine as apiUpdateMachine, resetMachines as apiResetMachines, deleteTransaction as apiDeleteTransaction, deleteCustomer as apiDeleteCustomer, updatePricing as apiUpdatePricing, createWalkInOrder, getAuthFetchOptions, deletePriceHistory, parseResponseJson } from '../../utils/api';
+import { getTransactionsPage, getStats, getMachines, getReviews, getPricing, getPriceHistory, verifyAdminToken, updateMachine as apiUpdateMachine, resetMachines as apiResetMachines, deleteTransaction as apiDeleteTransaction, deleteCustomer as apiDeleteCustomer, updatePricing as apiUpdatePricing, createWalkInOrder, getAuthFetchOptions, deletePriceHistory, parseResponseJson, API_BASE } from '../../utils/api';
 import { useToast } from './Toast';
 
 const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75];
@@ -138,7 +138,7 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
   });
   const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig | null>(null);
   useEffect(() => {
-    fetch('/api/delivery/config', { credentials: 'include' })
+    fetch(`${API_BASE}/delivery/config`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => { if (data.success && data.data) setDeliveryConfig(data.data); })
       .catch(() => {});
@@ -339,7 +339,7 @@ const WalkInOrderForm = ({ machines, pricingMap, onOrderCreated }: WalkInOrderFo
              }
            : { ...formData, address: combinedAddress, branch: undefined };
    
-        const res = await fetch('/api/transactions', {
+        const res = await fetch(`${API_BASE}/transactions`, {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            credentials: 'include',
@@ -1042,7 +1042,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resettingMachines, setResettingMachines] = useState(false);
   useEffect(() => {
-    fetch('/api/delivery/config', { credentials: 'include' })
+    fetch(`${API_BASE}/delivery/config`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => { if (data.success && data.data) setDeliveryConfig(data.data); })
       .catch(() => {});
@@ -1056,7 +1056,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       return;
     }
     const controller = new AbortController();
-    fetch('/api/delivery/quote', {
+    fetch(`${API_BASE}/delivery/quote`, {
       method: 'POST',
       ...getAuthFetchOptions(),
       body: JSON.stringify({ address: combinedAddress }),
@@ -1079,7 +1079,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     const controller = new AbortController();
     setWalkInQuoting(true);
     setWalkInQuoteError(null);
-    fetch(`/api/delivery/quote-coords?lat=${walkInDeliveryCoords.lat}&lng=${walkInDeliveryCoords.lng}`, { credentials: 'include' })
+    fetch(`${API_BASE}/delivery/quote-coords?lat=${walkInDeliveryCoords.lat}&lng=${walkInDeliveryCoords.lng}`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data) setWalkInDeliveryQuote({ distance_km: data.data.distance_km, fee: data.data.fee });
@@ -1088,7 +1088,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       .catch(() => { if (!controller.signal.aborted) { setWalkInDeliveryQuote(null); setWalkInQuoteError('Failed to calculate delivery cost'); } })
       .finally(() => { if (!controller.signal.aborted) setWalkInQuoting(false); });
     // reverse geocode address
-    fetch(`/api/delivery/reverse?lat=${walkInDeliveryCoords.lat}&lng=${walkInDeliveryCoords.lng}`, { credentials: 'include' })
+    fetch(`${API_BASE}/delivery/reverse?lat=${walkInDeliveryCoords.lat}&lng=${walkInDeliveryCoords.lng}`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data?.address) setWalkInForm(prev => ({ ...prev, address: data.data.address }));
@@ -1161,7 +1161,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
      setAddMachineConfirm(false);
      setAddingMachine(true);
       try {
-        const res = await fetch('/api/machines', {
+        const res = await fetch(`${API_BASE}/machines`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -1191,7 +1191,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
        const newRemainingTime = updates.remaining_time !== undefined
          ? (updates.remaining_time === null ? 0 : updates.remaining_time)
          : (updates.status === 'available' || updates.status === 'maintenance') ? 0 : (machine?.remaining_time ?? 0);
-       const res = await fetch(`/api/machines/${id}`, {
+       const res = await fetch(`${API_BASE}/machines/${id}`, {
          method: 'PATCH',
          credentials: 'include',
          headers: { 'Content-Type': 'application/json' },
@@ -1224,7 +1224,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     
     setDeletingMachine(id);
     try {
-      const res = await fetch(`/api/machines/${id}`, {
+      const res = await fetch(`${API_BASE}/machines/${id}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1263,7 +1263,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     
     setDeletingMachine(null);
     try {
-      const res = await fetch('/api/machines', {
+      const res = await fetch(`${API_BASE}/machines`, {
         method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1288,7 +1288,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
   // Pricing management handlers
   const fetchPricing = async () => {
     try {
-      const res = await fetch('/api/pricing', { credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+      const res = await fetch(`${API_BASE}/pricing`, { credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       const data = await parseResponseJson(res);
       if (data.success && data.data) {
         setPricing(data.data);
@@ -1321,7 +1321,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
   
   const fetchPriceHistory = async () => {
     try {
-      const res = await fetch('/api/pricing/history', { credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+      const res = await fetch(`${API_BASE}/pricing/history`, { credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       const data = await parseResponseJson(res);
       if (data.success && data.data) {
         setPriceHistory(data.data);
@@ -1369,7 +1369,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
         }
       });
       
-      const res = await fetch(`/api/pricing/${encodeURIComponent(editingPricing.service_type)}`, {
+      const res = await fetch(`${API_BASE}/pricing/${encodeURIComponent(editingPricing.service_type)}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1813,7 +1813,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
 
   const updateStatus = async (id: number, status: TransactionStatus, price?: number, weight?: number, payment_status?: string, machine_id?: number | null, service_type?: string, dryingTime?: number, remainingTime?: number): Promise<boolean> => {
      try {
-       const res = await fetch(`/api/transactions/${id}`, {
+       const res = await fetch(`${API_BASE}/transactions/${id}`, {
          method: 'PATCH',
          ...getAuthFetchOptions(),
          body: JSON.stringify({ status, total_price: price, weight, payment_status, machine_id, service_type, drying_time: dryingTime, remaining_time: remainingTime }),
@@ -1853,7 +1853,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     
     try {
       // 1. Update transaction with machine_id
-      const transactionRes = await fetch(`/api/transactions/${transactionId}`, {
+      const transactionRes = await fetch(`${API_BASE}/transactions/${transactionId}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1930,7 +1930,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
     });
 
     try {
-      const res = await fetch(`/api/machines/${id}`, {
+      const res = await fetch(`${API_BASE}/machines/${id}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -1995,7 +1995,7 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
       const formData = new FormData();
       formData.append('image', file);
       
-      const res = await fetch(`/api/transactions/${transactionId}/handwash-proof`, {
+      const res = await fetch(`${API_BASE}/transactions/${transactionId}/handwash-proof`, {
         method: 'POST',
         credentials: 'include',
         body: formData,
@@ -2536,8 +2536,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     const address = (document.getElementById('origin-address') as HTMLInputElement).value;
                     const latitude = parseFloat((document.getElementById('origin-lat') as HTMLInputElement).value);
                     const longitude = parseFloat((document.getElementById('origin-lng') as HTMLInputElement).value);
-                    await fetch('/api/delivery/origin', { method: 'PUT', ...getAuthFetchOptions(), body: JSON.stringify({ name, address, latitude, longitude }) });
-                    const res = await fetch('/api/delivery/config', { credentials: 'include' });
+                    await fetch(`${API_BASE}/delivery/origin`, { method: 'PUT', ...getAuthFetchOptions(), body: JSON.stringify({ name, address, latitude, longitude }) });
+                    const res = await fetch(`${API_BASE}/delivery/config`, { credentials: 'include' });
                     const json = await res.json();
                     if (json.success && json.data) setDeliveryConfig(json.data);
                   }}
@@ -2555,8 +2555,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     <div key={z.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl">
                       <span className="font-bold">{z.name} ({z.latitude}, {z.longitude})</span>
                       <button onClick={async () => {
-                        await fetch(`/api/delivery/zones/${z.id}`, { method: 'DELETE', ...getAuthFetchOptions() });
-                        const res = await fetch('/api/delivery/config', { credentials: 'include' });
+                        await fetch(`${API_BASE}/delivery/zones/${z.id}`, { method: 'DELETE', ...getAuthFetchOptions() });
+                        const res = await fetch(`${API_BASE}/delivery/config`, { credentials: 'include' });
                         const json = await res.json();
                         if (json.success && json.data) setDeliveryConfig(json.data);
                       }} className="text-rose-600 font-bold">Delete</button>
@@ -2571,8 +2571,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     const name = (document.getElementById('zone-name') as HTMLInputElement).value;
                     const latitude = parseFloat((document.getElementById('zone-lat') as HTMLInputElement).value);
                     const longitude = parseFloat((document.getElementById('zone-lng') as HTMLInputElement).value);
-                    await fetch('/api/delivery/zones', { method: 'POST', ...getAuthFetchOptions(), body: JSON.stringify({ name, latitude, longitude }) });
-                    const res = await fetch('/api/delivery/config', { credentials: 'include' });
+                    await fetch(`${API_BASE}/delivery/zones`, { method: 'POST', ...getAuthFetchOptions(), body: JSON.stringify({ name, latitude, longitude }) });
+                    const res = await fetch(`${API_BASE}/delivery/config`, { credentials: 'include' });
                     const json = await res.json();
                     if (json.success && json.data) setDeliveryConfig(json.data);
                   }} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold">Add Zone</button>
@@ -2587,8 +2587,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     <div key={b.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl">
                       <span className="font-bold">{b.min_km} - {b.max_km} km: ₱{b.fee}</span>
                       <button onClick={async () => {
-                        await fetch(`/api/delivery/bands/${b.id}`, { method: 'DELETE', ...getAuthFetchOptions() });
-                        const res = await fetch('/api/delivery/config', { credentials: 'include' });
+                        await fetch(`${API_BASE}/delivery/bands/${b.id}`, { method: 'DELETE', ...getAuthFetchOptions() });
+                        const res = await fetch(`${API_BASE}/delivery/config`, { credentials: 'include' });
                         const json = await res.json();
                         if (json.success && json.data) setDeliveryConfig(json.data);
                       }} className="text-rose-600 font-bold">Delete</button>
@@ -2605,8 +2605,8 @@ const AdminDashboard = ({ setView }: AdminDashboardProps) => {
                     const max_km = parseFloat((document.getElementById('band-max') as HTMLInputElement).value);
                     const fee = parseFloat((document.getElementById('band-fee') as HTMLInputElement).value);
                     const sort_order = parseInt((document.getElementById('band-order') as HTMLInputElement).value);
-                    await fetch('/api/delivery/bands', { method: 'POST', ...getAuthFetchOptions(), body: JSON.stringify({ min_km, max_km, fee, sort_order }) });
-                    const res = await fetch('/api/delivery/config', { credentials: 'include' });
+                    await fetch(`${API_BASE}/delivery/bands`, { method: 'POST', ...getAuthFetchOptions(), body: JSON.stringify({ min_km, max_km, fee, sort_order }) });
+                    const res = await fetch(`${API_BASE}/delivery/config`, { credentials: 'include' });
                     const json = await res.json();
                     if (json.success && json.data) setDeliveryConfig(json.data);
                   }} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold">Add Band</button>

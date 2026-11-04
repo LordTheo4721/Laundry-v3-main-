@@ -1,7 +1,6 @@
 // Express backend server: API routes, DB init, and static serving.
 
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { createDatabase, getDatabaseConfig } from "./src/db";
 import { fileURLToPath } from "url";
@@ -934,10 +933,15 @@ async function startServer() {
   // Create Vite in dev mode only when explicitly requested. Defaulting to
   // production serving avoids a blank page on hosts where NODE_ENV is unset.
   if (process.env.NODE_ENV === "development") {
-    vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "custom",
-    });
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "custom",
+      });
+    } catch (err) {
+      console.warn("[WARN] vite is not available; running without Vite dev middleware.", (err as Error)?.message);
+    }
   }
 
    const app = express();
@@ -1017,6 +1021,9 @@ async function startServer() {
   app.use((req, res, next) => {
     const allowedOrigins: (string | RegExp)[] = [
       'http://localhost:8080',
+      'https://happywashlaundry.online',
+      'https://www.happywashlaundry.online',
+      'https://api.happywashlaundry.online',
       'https://happywashlandry.onrender.com',
       // GitHub Codespaces patterns - more specific to prevent subdomain takeover
       /^https:\/\/[a-z0-9-]+\.githubpreview\.dev$/,
@@ -1101,15 +1108,18 @@ async function startServer() {
   // Use Vite middleware for dev
   if (vite) {
     app.use(vite.middlewares);
-   } else {
-     // Production mode - serve static files from build/ (fall back to dist/ if absent)
-     const fsSync = require("node:fs");
-     let staticDir = path.join(__dirname, "build");
-     if (!fsSync.existsSync(staticDir)) {
-       staticDir = path.join(__dirname, "dist");
-     }
-     app.use(express.static(staticDir));
-   }
+    } else {
+      // Production mode - serve static files from build/ (fall back to dist/ if absent).
+      // Guarded so an API-only deployment (no frontend build) does not crash.
+      const fsSync = require("node:fs");
+      let staticDir = path.join(__dirname, "build");
+      if (!fsSync.existsSync(staticDir)) {
+        staticDir = path.join(__dirname, "dist");
+      }
+      if (process.env.SERVE_FRONTEND !== "false" && fsSync.existsSync(staticDir)) {
+        app.use(express.static(staticDir));
+      }
+    }
 
   // Serve index.html for all non-API routes (SPA support)
   app.get("*", async (req, res, next) => {
@@ -1133,12 +1143,16 @@ async function startServer() {
         const indexPath = path.join(__dirname, "index.html");
         const html = await vite.transformIndexHtml(req.path, fs.readFileSync(indexPath, "utf-8"));
         res.send(html);
-      } else {
+       } else {
         // Production mode - serve index.html from build/ (fall back to dist/)
         const fsSync = fs;
         let indexPath = path.join(__dirname, "build", "index.html");
         if (!fsSync.existsSync(indexPath)) {
           indexPath = path.join(__dirname, "dist", "index.html");
+        }
+        if (!fsSync.existsSync(indexPath)) {
+          // API-only deployment: no frontend bundle present.
+          return res.status(404).json(apiResponse(false, undefined, "Not found"));
         }
         res.sendFile(indexPath);
       }
@@ -1307,11 +1321,11 @@ async function startServer() {
 
       // Set httpOnly cookie for better security
       const isProduction = process.env.NODE_ENV === 'production';
-      res.cookie('admin_token', token, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'strict',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+       res.cookie('admin_token', token, {
+         httpOnly: true,
+         secure: isProduction,
+         sameSite: isProduction ? 'none' : 'lax',
+         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/'
       });
 
@@ -1341,11 +1355,11 @@ async function startServer() {
       logAudit(user.userId, 'logout', `Logout for ${user.username}`, req);
     }
     // Clear the httpOnly cookie
-    res.clearCookie('admin_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/'
+     res.clearCookie('admin_token', {
+       httpOnly: true,
+       secure: process.env.NODE_ENV === 'production',
+       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+       path: '/'
     });
     res.json(apiResponse(true, undefined, "Logged out successfully"));
   });

@@ -13,6 +13,7 @@ import { calculatePriceWithFallback, FALLBACK_PRICING } from '../utils/pricing';
 import { getDeliveryFee } from '../utils/sharedPricing';
 import { BRANCHES } from '../utils/branches';
 import { getDeliveryFeeByBranch, TIER4_DEFAULT_FEE } from '../utils/deliveryTiers';
+import { API_BASE } from '../utils/api';
 import type { Transaction } from '../types';
 
 import type { PricingConfig } from '../utils/pricing';
@@ -151,7 +152,7 @@ const UserBooking = () => {
 
   // Fetch dynamic pricing
   useEffect(() => {
-    fetch('/api/pricing/public')
+    fetch(`${API_BASE}/pricing/public`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data) {
@@ -180,7 +181,7 @@ const UserBooking = () => {
     setDeliveryQuoteLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/delivery/quote', {
+        const res = await fetch(`${API_BASE}/delivery/quote`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: combinedAddress }),
@@ -358,7 +359,7 @@ const UserBooking = () => {
         })),
       };
 
-      const res = await fetch('/api/transactions', {
+      const res = await fetch(`${API_BASE}/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -575,7 +576,7 @@ const UserBooking = () => {
                              onClick={async () => {
                                setSendingCode(true);
                                try {
-                                 const res = await fetch('/api/verify-email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.customer_email }) });
+                                 const res = await fetch(`${API_BASE}/verify-email/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.customer_email }) });
                                  const data = await res.json();
                                  if (data.success) addToast({ type: 'success', message: 'Verification code sent to your email' });
                                  else addToast({ type: 'error', message: data.error || 'Failed to send code' });
@@ -601,7 +602,7 @@ const UserBooking = () => {
                                onClick={async () => {
                                  setVerifyingCode(true);
                                  try {
-                                   const res = await fetch('/api/verify-email/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.customer_email, code: emailCode }) });
+                                   const res = await fetch(`${API_BASE}/verify-email/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.customer_email, code: emailCode }) });
                                    const data = await res.json();
                                    if (data.success) { setEmailVerified(true); addToast({ type: 'success', message: 'Email verified' }); }
                                    else addToast({ type: 'error', message: data.error || 'Invalid code' });

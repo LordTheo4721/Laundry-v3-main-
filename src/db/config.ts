@@ -42,7 +42,7 @@ export function getDatabaseConfig(overrides: Partial<DatabaseConfig> = {}): Data
     port: overrides.port ?? toInt(env("DB_PORT", env("MYSQL_PORT", "3306")), 3306),
     user: overrides.user ?? env("DB_USER", env("MYSQL_USER", "root")),
     password: overrides.password ?? env("DB_PASSWORD", env("MYSQL_PASSWORD", "")),
-    database: overrides.database ?? env("DB_DATABASE", env("MYSQL_DATABASE", env("MYSQL_DB", "laundry"))),
+    database: overrides.database ?? env("DB_DATABASE", env("DB_NAME", env("MYSQL_DATABASE", env("MYSQL_DB", "laundry")))),
     ssl: overrides.ssl ?? toBool(env("DB_SSL", env("MYSQL_SSL", "false")), false),
     connectionLimit: overrides.connectionLimit ?? toInt(env("DB_POOL_SIZE", env("MYSQL_POOL_SIZE", "10")), 10),
     queueLimit: overrides.queueLimit ?? toInt(env("DB_QUEUE_LIMIT", env("MYSQL_QUEUE_LIMIT", "100")), 100),

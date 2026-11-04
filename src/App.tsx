@@ -41,7 +41,7 @@ import { ToastProvider, useToast } from './components/admin/Toast';
 import { calculatePrice, calculatePriceWithFallback, calculateGrandTotalWithMap, FALLBACK_PRICING } from './utils/pricing';
 
 import type { PricingConfig, PricingRow } from './utils/sharedPricing';
-import { getPublicReviews, verifyAdminToken, createReview } from './utils/api';
+import { getPublicReviews, verifyAdminToken, createReview, API_BASE } from './utils/api';
 import { confirmReviewSubmission } from './utils/reviewConfirmation';
 import { ADMIN_SESSION_CLEARED_EVENT, clearAdminSession, isAdminView, replaceHistoryEntry } from './utils/adminAuth';
 import type { Review, Transaction, Machine, Stats, TransactionStatus } from './types';
@@ -201,7 +201,7 @@ const Pricing = () => {
 
   // Fetch dynamic pricing from API
   useEffect(() => {
-    fetch('/api/pricing/public')
+    fetch(`${API_BASE}/pricing/public`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data) {
@@ -420,7 +420,7 @@ const MachineStatus = () => {
   const fetchMachines = async (showLoader = false, signal?: AbortSignal) => {
      if (showLoader) setLoading(true);
      try {
-       const res = await fetch('/api/machines', { signal });
+       const res = await fetch(`${API_BASE}/machines`, { signal });
        const response = await res.json();
         if (response.success && response.data) {
           // Always reconcile with server-provided machine state and timers
@@ -578,7 +578,7 @@ const TrackOrder = ({ setView }: { setView: (v: View) => void }) => {
     setShowReviewForm(false);
 
     try {
-      const res = await fetch('/api/transactions/track/' + encodeURIComponent(searchTerm));
+      const res = await fetch(`${API_BASE}/transactions/track/` + encodeURIComponent(searchTerm));
       const response = await res.json();
       
        if (response.success && response.data) {
@@ -620,7 +620,7 @@ const TrackOrder = ({ setView }: { setView: (v: View) => void }) => {
     setRescheduling(true);
     setRescheduleError('');
     try {
-      const res = await fetch(`/api/transactions/track/${encodeURIComponent(transaction.reference_number)}/reschedule`, {
+      const res = await fetch(`${API_BASE}/transactions/track/${encodeURIComponent(transaction.reference_number)}/reschedule`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appointment_date: rescheduleDate, appointment_time: rescheduleTime }),

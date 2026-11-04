@@ -3,7 +3,10 @@
 
 import type { Transaction, Machine, Stats, SalesData, Customer, Review, ReviewReply, Pricing, PriceHistory, PaginationMeta } from '../types';
 
-export const API_BASE = '/api';
+// Allow the frontend to target a separately deployed API (e.g. https://api.happywashlaundry.online).
+// Set VITE_API_URL at build time; defaults to a relative '/api' for same-origin/combined deployments.
+const API_ORIGIN = (String((import.meta as any).env?.VITE_API_URL || '')).replace(/\/+$/, '');
+export const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api` : '/api';
 
 // For cookie-based auth, we don't need to manually add Authorization header
 // The httpOnly cookie is sent automatically with credentials: 'include'
