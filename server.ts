@@ -1114,7 +1114,10 @@ async function startServer() {
   // Serve index.html for all non-API routes (SPA support)
   app.get("*", async (req, res, next) => {
     if (req.path.startsWith("/api")) {
-      return next();
+      // Never return the SPA shell for API requests; respond with structured JSON
+      // so the frontend can parse the error instead of receiving HTML (which
+      // would surface as "Server returned an invalid response (HTTP 200)").
+      return res.status(404).json(apiResponse(false, undefined, "API endpoint not found"));
     }
 
     try {
