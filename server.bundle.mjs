@@ -427,7 +427,7 @@ if (ADMIN_PASSWORD.includes("change-me") || ADMIN_PASSWORD.includes("change-me-t
   throw new Error("Invalid environment variable: ADMIN_PASSWORD (placeholder value is not allowed)");
 }
 var HASHED_ADMIN_PASSWORD = bcrypt.hashSync(ADMIN_PASSWORD, 12);
-var db2 = createDatabase(getDatabaseConfig());
+var db2 = db;
 db2.pragma("foreign_keys = ON");
 function initializeDatabase() {
   db2.exec(`
@@ -3351,6 +3351,8 @@ async function startServer() {
   });
   const timerInterval = setInterval(() => {
     try {
+      const anyInUse = db2.prepare("SELECT 1 AS found FROM machines WHERE status = 'in-use' LIMIT 1").get();
+      if (!anyInUse) return;
       const timerTransaction = db2.transaction(() => {
         const machinesCompleting = db2.prepare(`
             SELECT m.id, m.current_transaction_id FROM machines m

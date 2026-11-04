@@ -2,7 +2,7 @@
 
 import express from "express";
 import path from "path";
-import { createDatabase, getDatabaseConfig } from "./src/db";
+import { db as sharedDb } from "./src/db";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import morgan from "morgan";
@@ -69,7 +69,8 @@ if (ADMIN_PASSWORD.includes("change-me") || ADMIN_PASSWORD.includes("change-me-t
 const HASHED_ADMIN_PASSWORD = bcrypt.hashSync(ADMIN_PASSWORD, 12);
 
 // Initialize the MySQL database connection
-const db = createDatabase(getDatabaseConfig());
+// Reuse the connection created by src/db (one pool, one schema setup).
+const db = sharedDb;
 db.pragma("foreign_keys = ON");
 
 // Initialize database with schema and indexes
@@ -3706,6 +3707,10 @@ const pricingUpdateSchema = z.object({
   // Background task to decrement machine time every second
   const timerInterval = setInterval(() => {
     try {
+      // Skip the tick entirely when no machine is running (cheap indexed check).
+      const anyInUse = db.prepare("SELECT 1 AS found FROM machines WHERE status = 'in-use' LIMIT 1").get();
+      if (!anyInUse) return;
+
       // Use a transaction to ensure atomicity of multi-table updates
       const timerTransaction = db.transaction(() => {
         // Wash timers pause at zero until the admin explicitly starts drying.
