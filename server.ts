@@ -1111,12 +1111,11 @@ async function startServer() {
     } else {
       // Production mode - serve static files from build/ (fall back to dist/ if absent).
       // Guarded so an API-only deployment (no frontend build) does not crash.
-      const fsSync = require("node:fs");
       let staticDir = path.join(__dirname, "build");
-      if (!fsSync.existsSync(staticDir)) {
+      if (!fs.existsSync(staticDir)) {
         staticDir = path.join(__dirname, "dist");
       }
-      if (process.env.SERVE_FRONTEND !== "false" && fsSync.existsSync(staticDir)) {
+      if (process.env.SERVE_FRONTEND !== "false" && fs.existsSync(staticDir)) {
         app.use(express.static(staticDir));
       }
     }
@@ -1124,10 +1123,10 @@ async function startServer() {
   // Serve index.html for all non-API routes (SPA support)
   app.get("*", async (req, res, next) => {
     if (req.path.startsWith("/api")) {
-      // Never return the SPA shell for API requests; respond with structured JSON
-      // so the frontend can parse the error instead of receiving HTML (which
-      // would surface as "Server returned an invalid response (HTTP 200)").
-      return res.status(404).json(apiResponse(false, undefined, "API endpoint not found"));
+      // Never return the SPA shell for API requests. Let the real /api routes
+      // registered below match; unmatched /api paths get a JSON 404 from the
+      // handler placed after the last route.
+      return next();
     }
 
     try {
@@ -3679,6 +3678,11 @@ const pricingUpdateSchema = z.object({
        res.status(500).json(apiResponse(false, undefined, "Failed to delete delivery band"));
      }
    });
+
+    // Unmatched API routes: structured JSON 404. Must come after every /api route.
+    app.use("/api", (req, res) => {
+      res.status(404).json(apiResponse(false, undefined, "API endpoint not found"));
+    });
 
     // Global error handler (must be last middleware)
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
