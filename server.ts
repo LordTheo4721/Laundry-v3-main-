@@ -3806,7 +3806,14 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
-startServer().catch((err) => {
-  console.error("[FATAL] Server failed to start:", err);
-  process.exit(1);
-});
+// Start once per process. The module can be evaluated twice (e.g. loaded by both
+// require() and import() on the host), and a second app.listen() call is a no-op
+// that logs a warning and then breaks the restart cycle.
+const startedKey = "__laundryServerStarted";
+if (!(globalThis as any)[startedKey]) {
+  (globalThis as any)[startedKey] = true;
+  startServer().catch((err) => {
+    console.error("[FATAL] Server failed to start:", err);
+    process.exit(1);
+  });
+}
