@@ -12,6 +12,7 @@
     "clean": "node -e \"require('fs').rmSync('build',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
     "backup": "npx tsx scripts/backup.ts",
+    "migrate:data": "npx tsx scripts/migrate-sqlite-to-mysql.ts",
     "test": "vitest"
   },
   "dependencies": {
