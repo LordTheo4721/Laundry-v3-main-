@@ -12,6 +12,7 @@ export const getAuthHeaders = (): HeadersInit => {
   return { 'Content-Type': 'application/json' };
 };
 
+/** Build fetch options including credentials and auth headers. */
 export const getAuthFetchOptions = (): RequestInit => {
   return {
     credentials: 'include' as RequestCredentials,

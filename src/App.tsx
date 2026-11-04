@@ -39,7 +39,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import AdminSettings from './components/admin/AdminSettings';
 import { ToastProvider, useToast } from './components/admin/Toast';
 import { calculatePrice, calculatePriceWithFallback, calculateGrandTotalWithMap, FALLBACK_PRICING } from './utils/pricing';
-import { getDeliveryFee } from './utils/sharedPricing';
+
 import type { PricingConfig, PricingRow } from './utils/sharedPricing';
 import { getPublicReviews, verifyAdminToken, createReview } from './utils/api';
 import { confirmReviewSubmission } from './utils/reviewConfirmation';
@@ -339,9 +339,8 @@ const Pricing = () => {
                       const tier1 = config?.tier_1_limit ?? 5;
                       const tier2 = config?.tier_2_limit ?? 7;
                       const tier3 = config?.tier_3_limit ?? 8;
-                       const tier4 = config?.tier_4_limit ?? 9;
-                       const deliveryFee = getDeliveryFee(config || FALLBACK_PRICING[service.serviceType]);
-                       return [
+                        const tier4 = config?.tier_4_limit ?? 9;
+                        return [
                         { label: `1-${tier1} kgs`, qty: 1 },
                         { label: `${tier1 + 1}-${tier2} kgs`, qty: 6 },
                         { label: `${tier2 + 1}-${tier3} kgs`, qty: 8 },
@@ -352,9 +351,8 @@ const Pricing = () => {
                           <div className="flex justify-between items-center p-4 bg-zinc-50 rounded-2xl">
                             <span className="text-xs font-black uppercase tracking-widest text-zinc-400">{rate.label}</span>
                             <span className="text-xl font-extrabold text-zinc-900">₱{calculateDisplayPrice(service.serviceType!, rate.qty)}</span>
-                           </div>
-                           <p className="text-[10px] text-emerald-600 font-bold text-center">+ ₱{deliveryFee} delivery fee</p>
-                         </div>
+                            </div>
+                          </div>
                        ));
                     })()}
                   </div>
@@ -362,17 +360,14 @@ const Pricing = () => {
                   <div className="grid grid-cols-2 gap-4">
                     {service.serviceTypes.map((st, rIndex) => {
                       const label = st.replace('Comforter (', '').replace(')', '');
-                       const config = dynamicPricing[st] || FALLBACK_PRICING[st];
-                       const deliveryFee = getDeliveryFee(config);
-                       return (
+                        const config = dynamicPricing[st] || FALLBACK_PRICING[st];
+                        return (
                         <div key={rIndex} className="space-y-2">
                           <div className="flex justify-between items-center p-4 bg-zinc-50 rounded-2xl">
                             <span className="text-xs font-black uppercase tracking-widest text-zinc-400">{label}</span>
                              <span className="text-xl font-extrabold text-zinc-900">₱{calculateDisplayPrice(st, 1)}</span>
-                           </div>
-                           <p className="text-[10px] text-emerald-600 font-bold text-center">+ ₱{deliveryFee} delivery fee</p>
-
-                        </div>
+                            </div>
+                          </div>
                       );
                     })}
                   </div>
@@ -406,7 +401,7 @@ const Pricing = () => {
             Pickup & <br /> Delivery
           </h4>
           <p className="text-zinc-400 text-lg font-medium max-w-sm">
-            We bring the freshness to your doorstep. Delivery fee: may depend on which service. Drop-off is always free.
+            We bring the freshness to your doorstep. Drop-off is always free.
           </p>
         </div>
         <div className="relative z-10">
