@@ -2,6 +2,29 @@
 
 export type SqlEngine = "sqlite" | "mysql";
 
+function splitArgs(inner: string): string[] {
+  return inner.split(",").map((p) => p.trim()).filter((p) => p !== "");
+}
+
+function unquote(v: string): string {
+  return v.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function parseModifiers(mods: string[]): string {
+  let out = "";
+  for (const m of mods) {
+    const v = unquote(m);
+    const match = v.match(/^([+-])\s*(\d+)\s*(minute|minutes|hour|hours|day|days)$/i);
+    if (!match) continue;
+    const sign = match[1] === "+" ? " + " : " - ";
+    const n = match[2];
+    const unitRaw = match[3].toLowerCase().replace(/s$/, "");
+    const unit = unitRaw === "minute" ? "MINUTE" : unitRaw === "hour" ? "HOUR" : "DAY";
+    out += `${sign} INTERVAL ${n} ${unit}`;
+  }
+  return out;
+}
+
 export function translateSql(sql: string, engine: SqlEngine): string {
   if (engine === "sqlite") return sql;
   let s = sql;
@@ -12,20 +35,6 @@ export function translateSql(sql: string, engine: SqlEngine): string {
   s = s.replace(/\bREAL\b/g, "DOUBLE");
   // Keep TEXT, DATETIME, INT as-is (MySQL compatible enough)
 
-  // SQLite-specific functions -> MySQL
-  // date('now') variants
-  s = s.replace(/date\('now'\)/gi, "CURDATE()");
-  s = s.replace(/date\('now',\s*'-1 day'\)/gi, "DATE_SUB(CURDATE(), INTERVAL 1 DAY)");
-  s = s.replace(/date\('now',\s*'-7 days'\)/gi, "DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
-  s = s.replace(/date\('now',\s*'-14 days'\)/gi, "DATE_SUB(CURDATE(), INTERVAL 14 DAY)");
-  s = s.replace(/date\('now',\s*'-30 days'\)/gi, "DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
-  s = s.replace(/date\('now',\s*'-60 days'\)/gi, "DATE_SUB(CURDATE(), INTERVAL 60 DAY)");
-  // date(col)
-  s = s.replace(/\bdate\(([^)]+)\)/gi, "DATE($1)");
-  // strftime
-  s = s.replace(/CAST\(strftime\('%H',\s*([^)]+)\)\s*as\s*INTEGER\)/gi, "HOUR($1)");
-  s = s.replace(/CAST\(strftime\("%H",\s*([^)]+)\)\s*as\s*INTEGER\)/gi, "HOUR($1)");
-  s = s.replace(/strftime\('%w',\s*([^)]+)\)/gi, "(DAYOFWEEK($1) - 1)");
   // INSERT OR IGNORE / REPLACE
   s = s.replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, "INSERT IGNORE INTO");
   s = s.replace(/INSERT\s+OR\s+REPLACE\s+INTO/gi, "REPLACE INTO");
@@ -34,6 +43,63 @@ export function translateSql(sql: string, engine: SqlEngine): string {
   if (/^\s*PRAGMA\b/i.test(s)) {
     return ""; // adapter will skip empty
   }
+
+  // datetime('now', ...) and datetime(col, ...)
+  s = s.replace(/datetime\(([^)]*)\)/gi, (_m, inner) => {
+    const parts = splitArgs(inner);
+    if (parts.length === 0) return "UTC_TIMESTAMP()";
+    const base = parts[0].trim();
+    const mods = parts.slice(1);
+    const baseExpr = base.toLowerCase() === "'now'" ? "UTC_TIMESTAMP()" : base;
+    const modExpr = parseModifiers(mods);
+    if (!modExpr) return baseExpr;
+    return `(${baseExpr}${modExpr})`;
+  });
+
+  // date('now', ...) and date(col, ...)
+  s = s.replace(/\bdate\(([^)]*)\)/gi, (_m, inner) => {
+    const parts = splitArgs(inner);
+    if (parts.length === 0) return "CURDATE()";
+    const base = parts[0].trim();
+    const mods = parts.slice(1);
+    const isNow = base.toLowerCase() === "'now'";
+    const modExpr = parseModifiers(mods);
+    if (isNow && !modExpr) return "CURDATE()";
+    const baseExpr = isNow ? "UTC_TIMESTAMP()" : base;
+    if (!modExpr) return `DATE(${baseExpr})`;
+    return `DATE(${baseExpr}${modExpr})`;
+  });
+
+  // strftime('%H', expr, mods) inside CAST(... as INTEGER)
+  s = s.replace(/CAST\(strftime\('%H',\s*([^)]+)\)\s*as\s*INTEGER\)/gi, (_m, inner) => {
+    const parts = splitArgs(inner);
+    const base = (parts[0] || "").trim();
+    const mods = parts.slice(1);
+    const baseExpr = base.toLowerCase() === "'now'" ? "UTC_TIMESTAMP()" : base;
+    const modExpr = parseModifiers(mods);
+    if (!modExpr) return `HOUR(${baseExpr})`;
+    return `HOUR(${baseExpr}${modExpr})`;
+  });
+  s = s.replace(/CAST\(strftime\("%H",\s*([^)]+)\)\s*as\s*INTEGER\)/gi, (_m, inner) => {
+    const parts = splitArgs(inner);
+    const base = (parts[0] || "").trim();
+    const mods = parts.slice(1);
+    const baseExpr = base.toLowerCase() === "'now'" ? "UTC_TIMESTAMP()" : base;
+    const modExpr = parseModifiers(mods);
+    if (!modExpr) return `HOUR(${baseExpr})`;
+    return `HOUR(${baseExpr}${modExpr})`;
+  });
+
+  // strftime('%w', expr, mods)
+  s = s.replace(/strftime\('%w',\s*([^)]+)\)/gi, (_m, inner) => {
+    const parts = splitArgs(inner);
+    const base = (parts[0] || "").trim();
+    const mods = parts.slice(1);
+    const baseExpr = base.toLowerCase() === "'now'" ? "UTC_TIMESTAMP()" : base;
+    const modExpr = parseModifiers(mods);
+    if (!modExpr) return `(DAYOFWEEK(${baseExpr}) - 1)`;
+    return `(DAYOFWEEK(${baseExpr}${modExpr}) - 1)`;
+  });
 
   return s;
 }

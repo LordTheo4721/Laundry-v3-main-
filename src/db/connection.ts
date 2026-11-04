@@ -12,19 +12,25 @@ import { createMysqlAdapter } from "./mysql";
  */
 export function createConnection(config?: DatabaseConfig): Database {
   const cfg = config ?? getDatabaseConfig();
+  console.log("[DB] Resolved engine:", cfg.engine, "| host:", cfg.host, "| database:", cfg.database, "| fallbackToSqlite:", cfg.fallbackToSqlite, "| sqlitePath:", cfg.sqlitePath);
   if (cfg.engine === "mysql") {
     try {
       const db = createMysqlAdapter(cfg);
-      if (db.healthCheck()) return db;
+      if (db.healthCheck()) {
+        console.log("[DB] MySQL connection OK");
+        return db;
+      }
       throw new Error("MySQL health check failed");
     } catch (err) {
+      console.error("[DB] MySQL connection failed:", (err as Error)?.message);
       if (cfg.fallbackToSqlite) {
-        console.warn("[DB] MySQL unavailable, falling back to SQLite:", (err as Error)?.message);
+        console.warn("[DB] Falling back to SQLite:", cfg.sqlitePath);
         return createSqliteAdapter(cfg.sqlitePath);
       }
       throw err;
     }
   }
+  console.log("[DB] Using SQLite:", cfg.sqlitePath);
   return createSqliteAdapter(cfg.sqlitePath);
 }
 

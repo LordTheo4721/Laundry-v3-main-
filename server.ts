@@ -78,9 +78,9 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      reference_number TEXT UNIQUE,
+       reference_number VARCHAR(64) UNIQUE,
       customer_name TEXT,
-      customer_phone TEXT,
+       customer_phone VARCHAR(32),
       customer_email TEXT,
       service_type TEXT,
       quantity INTEGER DEFAULT 1,
@@ -91,7 +91,7 @@ function initializeDatabase() {
        delivery_method TEXT,
        address TEXT,
        branch TEXT,
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'washing', 'drying', 'ready', 'completed', 'declined')),
+       status VARCHAR(32) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'washing', 'drying', 'ready', 'completed', 'declined')),
       total_price REAL DEFAULT 0,
       payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid')),
       payment_method TEXT DEFAULT 'cash',
@@ -105,7 +105,7 @@ function initializeDatabase() {
       name TEXT,
       type TEXT,
       capacity INTEGER DEFAULT 10,
-      status TEXT DEFAULT 'available' CHECK (status IN ('available', 'in-use', 'maintenance')),
+       status VARCHAR(32) DEFAULT 'available' CHECK (status IN ('available', 'in-use', 'maintenance')),
       remaining_time INTEGER DEFAULT 0,
       drying_time INTEGER DEFAULT 0
     );
@@ -122,6 +122,19 @@ function initializeDatabase() {
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
     );
+  `);
+
+  // Ensure admin_users exists before review_replies (MySQL requires referenced table to exist)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username VARCHAR(64) NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin')),
+      last_login DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
   `);
 
   // Create review_replies table (admin replies to customer reviews)
@@ -231,7 +244,7 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
       estimated_wait_time INTEGER DEFAULT 0,
       estimated_start_time TEXT,
       estimated_end_time TEXT,
-      status TEXT DEFAULT 'waiting',
+       status VARCHAR(32) DEFAULT 'waiting',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
     )
@@ -267,7 +280,7 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
   db.exec(`
     CREATE TABLE IF NOT EXISTS email_verifications (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
-       email TEXT NOT NULL,
+        email VARCHAR(255) NOT NULL,
        token TEXT NOT NULL,
        expires_at DATETIME NOT NULL,
       verified INTEGER DEFAULT 0,
@@ -285,7 +298,7 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
    db.exec(`
      CREATE TABLE IF NOT EXISTS pricing (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
-       service_type TEXT NOT NULL UNIQUE,
+        service_type VARCHAR(128) NOT NULL UNIQUE,
        pricing_type TEXT NOT NULL DEFAULT 'tiered', -- 'tiered' or 'per_kg'
        base_price REAL DEFAULT 0,
        tier_1_limit INTEGER DEFAULT 5,
@@ -308,8 +321,8 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
    db.exec(`
      CREATE TABLE IF NOT EXISTS price_history (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
-       service_type TEXT NOT NULL,
-       old_price_data TEXT, -- JSON string of old pricing
+        service_type VARCHAR(128) NOT NULL,
+        old_price_data TEXT, -- JSON string of old pricing
        new_price_data TEXT, -- JSON string of new pricing
        changed_by TEXT DEFAULT 'admin',
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -357,7 +370,7 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
   db.exec(`
     CREATE TABLE IF NOT EXISTS admin_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT NOT NULL UNIQUE,
+       username VARCHAR(64) NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin')),
       last_login DATETIME,
@@ -371,7 +384,7 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admin_id INTEGER NOT NULL,
-      action TEXT NOT NULL CHECK (action IN ('login', 'logout', 'password_change', 'username_change', 'failed_login')),
+       action VARCHAR(32) NOT NULL CHECK (action IN ('login', 'logout', 'password_change', 'username_change', 'failed_login')),
       details TEXT,
       ip_address TEXT,
       user_agent TEXT,
@@ -496,7 +509,14 @@ addColumnIfNotExists("reviews", "photos", "TEXT"); // JSON array of image URLs
   console.log("[DB] Database initialized with indexes");
 }
 
-initializeDatabase();
+try {
+  initializeDatabase();
+  console.log("[DB] initializeDatabase() completed successfully. Engine:", db.engine);
+} catch (e) {
+  console.error("[DB] initializeDatabase() FAILED:", (e as Error)?.message);
+  console.error((e as Error)?.stack);
+  throw e;
+}
 
 // ============================================
 // Multer Configuration for File Uploads
@@ -1667,8 +1687,9 @@ async function startServer() {
       } catch (error: any) {
         db.prepare("ROLLBACK").run();
         
-        // Check if it's a unique constraint violation on reference_number
-        if (error.message?.includes('UNIQUE constraint failed') && error.message?.includes('reference_number')) {
+        // Check if it's a unique constraint violation on reference_number (SQLite or MySQL)
+        const isDupRef = (error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062 || /Duplicate entry/i.test(error?.message || '') || /UNIQUE constraint failed/i.test(error?.message || '')) && /reference_number/i.test(error?.message || '');
+        if (isDupRef) {
           console.warn(`[API] Reference number collision on attempt ${attempt + 1}, retrying...`);
           if (attempt === 2) {
             console.error("[API] Max retries reached for reference number generation");
@@ -1925,8 +1946,9 @@ async function startServer() {
       } catch (error: any) {
         db.prepare("ROLLBACK").run();
         
-        // Check if it's a unique constraint violation on reference_number
-        if (error.message?.includes('UNIQUE constraint failed') && error.message?.includes('reference_number')) {
+        // Check if it's a unique constraint violation on reference_number (SQLite or MySQL)
+        const isDupRef = (error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062 || /Duplicate entry/i.test(error?.message || '') || /UNIQUE constraint failed/i.test(error?.message || '')) && /reference_number/i.test(error?.message || '');
+        if (isDupRef) {
           console.warn(`[API] Reference number collision on attempt ${attempt + 1}, retrying...`);
           if (attempt === 2) {
             console.error("[API] Max retries reached for reference number generation");
@@ -3401,9 +3423,11 @@ const pricingUpdateSchema = z.object({
       );
     }
     
-    // Handle SQLite constraint errors
-    if (err.message?.includes('UNIQUE constraint failed')) {
-      if (err.message.includes('reference_number')) {
+    // Handle unique constraint errors (SQLite or MySQL)
+    const e: any = err;
+    const isDupErr = e?.code === 'ER_DUP_ENTRY' || e?.errno === 1062 || /Duplicate entry/i.test(e?.message || '') || /UNIQUE constraint failed/i.test(e?.message || '');
+    if (isDupErr) {
+      if (/reference_number/i.test(err?.message || '')) {
         return res.status(409).json(
           apiResponse(false, undefined, "Reference number collision, please try again")
         );
@@ -3413,7 +3437,8 @@ const pricingUpdateSchema = z.object({
       );
     }
     
-    if (err.message?.includes('FOREIGN KEY constraint failed')) {
+    const isFkErr = /FOREIGN KEY constraint failed/i.test(err?.message || '') || /foreign key constraint fails/i.test(err?.message || '');
+    if (isFkErr) {
       return res.status(400).json(
         apiResponse(false, undefined, "Invalid reference to related record")
       );

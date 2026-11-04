@@ -48,8 +48,18 @@ the API will not work. For a fully working site use option B.
    NODE_ENV=production
    JWT_SECRET=<openssl rand -base64 32>
    ADMIN_PASSWORD=<strong, >=12 chars>
-   DB_NAME=laundry.db
-   MACHINE_DEFAULT_TIME=2700
+    DB_NAME=laundry.db
+    # Use MySQL/MariaDB on Hostinger (SQLite is not supported on shared hosting)
+    DB_ENGINE=mysql
+    DB_FALLBACK_TO_SQLITE=false
+    DB_HOST=<hostinger-mysql-host>
+    DB_PORT=3306
+    DB_USER=<mysql-user>
+    DB_PASSWORD=<mysql-password>
+    DB_DATABASE=<mysql-database>
+    DB_SSL=false
+    DB_POOL_SIZE=10
+    MACHINE_DEFAULT_TIME=2700
    ALLOWED_ORIGINS=https://yourdomain.com
    SMTP_HOST=...
    SMTP_PORT=587
