@@ -3693,7 +3693,10 @@ const pricingUpdateSchema = z.object({
     });
 
     // Start the server
-    const server = app.listen(PORT, () => {
+    // Under Phusion Passenger (Hostinger Node.js hosting) the app must listen on the
+    // 'passenger' target, not a port number. Passenger sets PASSENGER_APP_ENV.
+    const listenTarget: string | number = process.env.PASSENGER_APP_ENV ? "passenger" : PORT;
+    const server = app.listen(listenTarget, () => {
       console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║   Laundry Management Server                       ║

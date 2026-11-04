@@ -3340,7 +3340,8 @@ async function startServer() {
     if (res.headersSent) return next(err);
     res.status(500).json(apiResponse(false, void 0, "Internal server error"));
   });
-  const server = app.listen(PORT, () => {
+  const listenTarget = process.env.PASSENGER_APP_ENV ? "passenger" : PORT;
+  const server = app.listen(listenTarget, () => {
     console.log(`
 \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557
 \u2551   Laundry Management Server                       \u2551
