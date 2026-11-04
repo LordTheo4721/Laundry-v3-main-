@@ -957,7 +957,8 @@ async function startServer() {
    } else if (trustProxyRaw) {
      const hops = parseInt(trustProxyRaw, 10);
      if (Number.isFinite(hops) && hops > 0) app.set("trust proxy", hops);
-   } else if (process.env.NODE_ENV === "production") {
+   } else {
+     // Hostinger and other hosts sit behind a reverse proxy: trust one hop by default.
      app.set("trust proxy", 1);
    }
 

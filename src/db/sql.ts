@@ -101,6 +101,11 @@ export function translateSql(sql: string, engine: SqlEngine): string {
     return `(DAYOFWEEK(${baseExpr}${modExpr}) - 1)`;
   });
 
+  // SQLite MAX(a, b) scalar form -> MySQL GREATEST(a, b)
+  s = s.replace(/\bMAX\(\s*([^()]+?)\s*,\s*([^()]+?)\s*\)/g, "GREATEST($1, $2)");
+  // SQLite CAST(... AS INTEGER) -> MySQL CAST(... AS SIGNED)
+  s = s.replace(/\bas\s+INTEGER\s*\)/gi, "AS SIGNED)");
+
   return s;
 }
 
