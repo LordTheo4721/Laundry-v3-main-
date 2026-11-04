@@ -25,5 +25,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["vitest/globals", "node"]
-  }
+  },
+  "exclude": ["node_modules", "dist", "build", "happy-wash-delivery"]
 }

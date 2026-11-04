@@ -1,100 +1,57 @@
 // MySQL/MariaDB adapter implementing the Database interface.
-// Wraps mysql2 pool with synchronous helpers via deasync.
+// The async mysql2 driver runs in a worker thread (mysql-worker.mjs); calls are made
+// synchronously through synckit so the rest of the app can keep using db.prepare().get/all/run.
 
-import mysql from "mysql2/promise";
-import deasync from "deasync";
+import { fileURLToPath } from "url";
+import { createSyncFn } from "synckit";
 import type { Database as DbIface, Statement, DatabaseConfig } from "./types";
 import { translateSql } from "./sql";
 
-function sync<T>(promise: Promise<T>, timeoutMs = 15000): T {
-  let result: T | undefined;
-  let error: any;
-  let done = false;
-  const timer = setTimeout(() => {
-    if (!done) {
-      error = new Error(`Database operation timed out after ${timeoutMs}ms`);
-      done = true;
-    }
-  }, timeoutMs);
-  promise.then((r) => { result = r; done = true; }).catch((e) => { error = e; done = true; });
-  deasync.loopWhile(() => !done);
-  clearTimeout(timer);
-  if (error) throw error;
-  return result as T;
+const WORKER_PATH = fileURLToPath(new URL("./mysql-worker.mjs", import.meta.url));
+
+interface WorkerResult {
+  rows?: any[];
+  affectedRows?: number;
+  insertId?: number;
+  __error?: boolean;
+  code?: string;
+  message?: string;
 }
 
 /**
  * Create a MySQL/MariaDB adapter implementing the Database interface.
  * @param config Resolved database configuration.
  */
-/**
- * Diagnostic: open one plain mysql2 connection with a short timeout and log the
- * real error code (ETIMEDOUT, ECONNREFUSED, ER_ACCESS_DENIED_ERROR, ...). Never logs the password.
- */
-function diagnoseConnection(config: DatabaseConfig): void {
-  const started = Date.now();
-  const attempt = mysql
-    .createConnection({
-      host: config.host,
-      port: config.port,
-      user: config.user,
-      password: config.password,
-      database: config.database,
-      connectTimeout: 5000,
-    })
-    .then(async (conn) => {
-      try {
-        await conn.query("SELECT 1");
-      } finally {
-        await conn.end().catch(() => {});
-      }
-      return "ok";
-    });
-  try {
-    sync(attempt, 8000);
-    console.log(`[DB] Diagnostic connect OK in ${Date.now() - started}ms`);
-  } catch (e) {
-    const err = e as { code?: string; errno?: number; sqlState?: string; message?: string };
-    console.error(
-      `[DB] Diagnostic connect failed after ${Date.now() - started}ms: code=${err?.code ?? "UNKNOWN"} errno=${err?.errno ?? "n/a"} sqlState=${err?.sqlState ?? "n/a"} message=${String(err?.message ?? "").slice(0, 160)}`
-    );
-  }
-}
-
 export function createMysqlAdapter(config: DatabaseConfig): DbIface {
-  diagnoseConnection(config);
-  const pool = mysql.createPool({
+  const callWorker = createSyncFn<(action: string, payload?: unknown) => WorkerResult>(WORKER_PATH);
+
+  // Run one worker action; a worker-side error becomes a thrown Error that keeps the MySQL code.
+  const call = (action: string, payload?: unknown): WorkerResult => {
+    const res = callWorker(action, payload);
+    if (res && res.__error) {
+      const err = new Error(res.message ?? "MySQL error") as Error & { code?: string };
+      err.code = res.code;
+      throw err;
+    }
+    return res;
+  };
+
+  call("init", {
     host: config.host,
     port: config.port,
     user: config.user,
     password: config.password,
     database: config.database,
-    ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    ssl: config.ssl,
     connectionLimit: config.connectionLimit,
-    waitForConnections: true,
     queueLimit: typeof config.queueLimit === "number" ? config.queueLimit : 100,
     connectTimeout: typeof config.connectTimeout === "number" ? config.connectTimeout : 10000,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
-    multipleStatements: true,
-    dateStrings: true,
-    charset: "utf8mb4",
-    timezone: "Z",
   });
 
-  // Ensure database exists? Assume provisioned. Try to create if missing (best effort).
-  try {
-    const adminPool = mysql.createPool({
-      host: config.host,
-      port: config.port,
-      user: config.user,
-      password: config.password,
-      multipleStatements: true,
-      dateStrings: true,
-    });
-    sync(adminPool.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`));
-    adminPool.end().catch(() => {});
-  } catch { /* ignore */ }
+  const query = (sql: string, params: unknown[]): WorkerResult => call("query", { sql, params });
+
+  const normalise = (params: unknown[]): unknown[] =>
+    params.length === 1 && Array.isArray(params[0]) ? (params[0] as unknown[]) : params;
 
   const adapter: DbIface = {
     engine: "mysql",
@@ -102,56 +59,50 @@ export function createMysqlAdapter(config: DatabaseConfig): DbIface {
       const translated = translateSql(sql, "mysql");
       return {
         get(...params: any[]) {
-          const p = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          const [rows] = sync(pool.query(translated, p));
-          const arr = rows as any[];
-          return arr && arr.length ? arr[0] : undefined;
+          const rows = query(translated, normalise(params)).rows ?? [];
+          return rows.length ? rows[0] : undefined;
         },
         all(...params: any[]) {
-          const p = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          const [rows] = sync(pool.query(translated, p));
-          return (rows as any[]) || [];
+          return query(translated, normalise(params)).rows ?? [];
         },
         run(...params: any[]) {
-          const p = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          const [result] = sync(pool.query(translated, p));
-          const r: any = result;
-          return { changes: r?.affectedRows ?? 0, lastInsertRowid: r?.insertId ?? 0 };
+          const r = query(translated, normalise(params));
+          return { changes: r.affectedRows ?? 0, lastInsertRowid: r.insertId ?? 0 };
         },
       };
     },
     exec(sql: string) {
       const translated = translateSql(sql, "mysql");
       if (!translated.trim()) return;
-      sync(pool.query(translated));
+      query(translated, []);
     },
     transaction<T = any>(fn: () => T): () => T {
       return () => {
-        sync(pool.query("START TRANSACTION"));
+        call("begin");
         try {
           const res = fn();
-          sync(pool.query("COMMIT"));
+          call("commit");
           return res;
         } catch (e) {
-          try { sync(pool.query("ROLLBACK")); } catch { /* ignore */ }
+          try { call("rollback"); } catch { /* ignore */ }
           throw e;
         }
       };
     },
     pragma(statement: string) {
-      // Map SQLite pragma to MySQL equivalent
-      if (/foreign_keys/i.test(statement)) {
-        try { sync(pool.query("SET FOREIGN_KEY_CHECKS = 1")); } catch { /* ignore */ }
-      }
+      // SQLite pragmas have no MySQL equivalent; foreign key checks are on by default.
+      void statement;
     },
     close() {
-      try { sync(pool.end()); } catch { /* ignore */ }
+      try { call("close"); } catch { /* ignore */ }
     },
     healthCheck() {
-      try { sync(pool.query("SELECT 1")); return true; } catch (e) {
-        const err = e as { code?: string; errno?: number; sqlState?: string };
-        // Log only the error code (never the password or SQL) so connection problems are diagnosable.
-        console.error(`[DB] MySQL health check error: code=${err?.code ?? "UNKNOWN"} errno=${err?.errno ?? "n/a"} sqlState=${err?.sqlState ?? "n/a"}`);
+      try {
+        call("ping");
+        return true;
+      } catch (e) {
+        const err = e as { code?: string };
+        console.error(`[DB] MySQL health check error: code=${err?.code ?? "UNKNOWN"}`);
         return false;
       }
     },
