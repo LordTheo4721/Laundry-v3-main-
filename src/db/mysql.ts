@@ -27,7 +27,42 @@ function sync<T>(promise: Promise<T>, timeoutMs = 15000): T {
  * Create a MySQL/MariaDB adapter implementing the Database interface.
  * @param config Resolved database configuration.
  */
+/**
+ * Diagnostic: open one plain mysql2 connection with a short timeout and log the
+ * real error code (ETIMEDOUT, ECONNREFUSED, ER_ACCESS_DENIED_ERROR, ...). Never logs the password.
+ */
+function diagnoseConnection(config: DatabaseConfig): void {
+  const started = Date.now();
+  const attempt = mysql
+    .createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      connectTimeout: 5000,
+    })
+    .then(async (conn) => {
+      try {
+        await conn.query("SELECT 1");
+      } finally {
+        await conn.end().catch(() => {});
+      }
+      return "ok";
+    });
+  try {
+    sync(attempt, 8000);
+    console.log(`[DB] Diagnostic connect OK in ${Date.now() - started}ms`);
+  } catch (e) {
+    const err = e as { code?: string; errno?: number; sqlState?: string; message?: string };
+    console.error(
+      `[DB] Diagnostic connect failed after ${Date.now() - started}ms: code=${err?.code ?? "UNKNOWN"} errno=${err?.errno ?? "n/a"} sqlState=${err?.sqlState ?? "n/a"} message=${String(err?.message ?? "").slice(0, 160)}`
+    );
+  }
+}
+
 export function createMysqlAdapter(config: DatabaseConfig): DbIface {
+  diagnoseConnection(config);
   const pool = mysql.createPool({
     host: config.host,
     port: config.port,
