@@ -1,6 +1,7 @@
-// SQL dialect translation helpers for dual-database support.
+// Translates the app's SQL (written in the SQLite-style dialect used throughout
+// server.ts) into MySQL/MariaDB syntax before it runs.
 
-export type SqlEngine = "sqlite" | "mysql";
+export type SqlEngine = "mysql";
 
 function splitArgs(inner: string): string[] {
   return inner.split(",").map((p) => p.trim()).filter((p) => p !== "");
@@ -26,7 +27,6 @@ function parseModifiers(mods: string[]): string {
 }
 
 export function translateSql(sql: string, engine: SqlEngine): string {
-  if (engine === "sqlite") return sql;
   let s = sql;
 
   // DDL type mappings

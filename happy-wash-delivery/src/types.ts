@@ -1,8 +1,8 @@
 // Shared types for the delivery service.
 
-import type { Database as BetterSqlite3Database } from 'better-sqlite3';
+import type { MysqlDatabase } from './mysql.js';
 
-export type Database = BetterSqlite3Database;
+export type Database = MysqlDatabase;
 
 export interface Coordinates {
   latitude: number;

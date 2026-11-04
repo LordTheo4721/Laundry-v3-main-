@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initDatabase } from '../src/database.js';
+import { after } from 'node:test';
+import { initDatabase, closeAllDatabases } from '../src/database.js';
 import { haversineKm, calculateDeliveryFee } from '../src/pricingService.js';
 import { ValidationError, NotFoundError, OutOfServiceAreaError } from '../src/types.js';
 import { config } from '../src/config.js';
@@ -13,7 +14,7 @@ test('haversineKm returns 0 for identical points', () => {
 });
 
 test('customer at store coordinates: distance 0, total 39', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   const result = calculateDeliveryFee(
     { latitude: STORE.latitude, longitude: STORE.longitude },
     db
@@ -29,7 +30,7 @@ test('customer at store coordinates: distance 0, total 39', () => {
 });
 
 test('customer at exactly 2.00 km: total 39', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   // find a latitude offset yielding ~2.00 km
   let lat = STORE.latitude;
   while (haversineKm(STORE, { latitude: lat, longitude: STORE.longitude }) < 2) {
@@ -46,7 +47,7 @@ test('customer at exactly 2.00 km: total 39', () => {
 });
 
 test('customer at 2.01 km: total 49', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   // point clearly beyond 2 km
   const lat = STORE.latitude + 0.02; // ~2.22 km
   const result = calculateDeliveryFee(
@@ -59,7 +60,7 @@ test('customer at 2.01 km: total 49', () => {
 });
 
 test('far barangay where formula exceeds floor: no adjustment', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   // Mamat-ing Norte is tier 4 with floor 110; use a far point
   const result = calculateDeliveryFee(
     { latitude: 16.6712, longitude: 120.3898, barangayId: 1 },
@@ -71,7 +72,7 @@ test('far barangay where formula exceeds floor: no adjustment', () => {
 });
 
 test('near Tier 2 barangay under 2 km: floor raises price to 49', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   // find a tier 2 barangay id
   // Barangay I id = 6
   const result = calculateDeliveryFee(
@@ -86,7 +87,7 @@ test('near Tier 2 barangay under 2 km: floor raises price to 49', () => {
 });
 
 test('invalid inputs throw ValidationError', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   assert.throws(() => calculateDeliveryFee({ latitude: 'x' as unknown as number, longitude: 0 }, db), ValidationError);
   assert.throws(() => calculateDeliveryFee({ latitude: 91, longitude: 0 }, db), ValidationError);
   assert.throws(() => calculateDeliveryFee({ latitude: 0, longitude: 0 } as { latitude: number; longitude: number }, db), (e: unknown) => {
@@ -96,7 +97,7 @@ test('invalid inputs throw ValidationError', () => {
 });
 
 test('missing longitude throws', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   assert.throws(
     () => calculateDeliveryFee({ latitude: 0 } as unknown as { latitude: number; longitude: number }, db),
     ValidationError
@@ -104,7 +105,7 @@ test('missing longitude throws', () => {
 });
 
 test('barangayId 0 throws ValidationError', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   assert.throws(
     () => calculateDeliveryFee({ latitude: 0, longitude: 0, barangayId: 0 }, db),
     ValidationError
@@ -112,7 +113,7 @@ test('barangayId 0 throws ValidationError', () => {
 });
 
 test('unknown barangayId throws NotFoundError', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   assert.throws(
     () => calculateDeliveryFee({ latitude: STORE.latitude, longitude: STORE.longitude, barangayId: 99999 }, db),
     NotFoundError
@@ -120,7 +121,7 @@ test('unknown barangayId throws NotFoundError', () => {
 });
 
 test('point beyond 25 km throws OutOfServiceAreaError', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   // move far away
   assert.throws(
     () => calculateDeliveryFee({ latitude: 0, longitude: 0 }, db),
@@ -129,9 +130,10 @@ test('point beyond 25 km throws OutOfServiceAreaError', () => {
 });
 
 test('string latitude via route? service rejects', () => {
-  const db = initDatabase(':memory:');
+  const db = initDatabase();
   assert.throws(
     () => calculateDeliveryFee({ latitude: '16.6' as unknown as number, longitude: 120.3 }, db),
     ValidationError
   );
 });
+after(() => closeAllDatabases());

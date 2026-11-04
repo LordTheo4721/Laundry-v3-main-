@@ -1,5 +1,5 @@
 // Central database module entry point.
-// Exposes the configured db adapter and helper accessors.
+// Exposes the configured MySQL adapter and helper accessors.
 
 import { getDatabaseConfig } from "./config";
 import { createDatabase } from "./connection";
@@ -11,11 +11,6 @@ export const db: Database = createDatabase(dbConfig);
 /** Return the active database engine name. */
 export function getEngine(): string {
   return db.engine;
-}
-
-/** True when the active adapter is SQLite. */
-export function isSqlite(): boolean {
-  return db.isSqlite();
 }
 
 /** True when the active adapter is MySQL/MariaDB. */

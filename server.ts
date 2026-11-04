@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 // Environment variables with defaults
 const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
-const DB_NAME = process.env.DB_NAME || "laundry.db";
+const DB_NAME = process.env.DB_DATABASE || "laundry";
 const MACHINE_DEFAULT_TIME = parseInt(process.env.MACHINE_DEFAULT_TIME || "2700", 10);
 
 // NODE_ENV should be production on the live server; warn (never fail) if unset/misconfigured.
@@ -68,7 +68,7 @@ if (ADMIN_PASSWORD.includes("change-me") || ADMIN_PASSWORD.includes("change-me-t
 // Use higher cost factor (12) for better security against brute force
 const HASHED_ADMIN_PASSWORD = bcrypt.hashSync(ADMIN_PASSWORD, 12);
 
-// Initialize database via dual-database factory (SQLite default, MySQL optional)
+// Initialize the MySQL database connection
 const db = createDatabase(getDatabaseConfig());
 db.pragma("foreign_keys = ON");
 
@@ -176,7 +176,8 @@ function initializeDatabase() {
       "tier_3_limit", "tier_3_price", "tier_4_limit", "tier_4_price", "tier_5_price_per_kg", "per_kg_price",
       "is_active", "delivery_fee", "old_price_data", "new_price_data", "changed_by",
       "username", "password_hash", "role", "last_login",
-      "admin_id", "action", "details", "ip_address", "user_agent"
+      "admin_id", "action", "details", "ip_address", "user_agent",
+      "branch"
     ]);
     
     if (!allowedTables.has(table) || !allowedColumns.has(column)) {
@@ -3395,7 +3396,7 @@ const pricingUpdateSchema = z.object({
      }
    });
 
-   // Delete customer: permanently remove customer account data; soft-delete related recent activity (transactions)
+  // Delete customer: permanently remove customer account data; soft-delete related recent activity (transactions)
    app.delete("/api/customers/:phone", requireAuth, (req, res) => {
     const { phone } = req.params;
     try {

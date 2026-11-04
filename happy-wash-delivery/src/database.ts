@@ -1,10 +1,8 @@
-// SQLite database access for the delivery service.
+// MySQL database access for the delivery service.
 
-import fs from 'node:fs';
-import path from 'node:path';
-import DatabaseConstructor from 'better-sqlite3';
 import { config } from './config.js';
-import { BarangayRow, type Database } from './types.js';
+import { createMysqlDatabase, type MysqlDatabase } from './mysql.js';
+import { BarangayRow } from './types.js';
 
 export type { Database } from './types.js';
 
@@ -69,26 +67,38 @@ const SEED: Array<[string, number, number, number, number]> = [
   ['Poro', 16.6111, 120.2882, 3, 65.0],
 ];
 
-export function initDatabase(dbPath: string = config.DB_PATH): Database {
-  if (dbPath !== ':memory:') {
-    const dir = path.dirname(dbPath);
-    if (dir && dir !== '.' && !fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  }
-  const db = new DatabaseConstructor(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+/** Every connection opened by initDatabase, so tests and shutdown can close them. */
+const openDatabases: MysqlDatabase[] = [];
+
+/**
+ * Open the MySQL database (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE),
+ * create the barangays table if needed, and seed it. Throws if MySQL is unreachable.
+ */
+export function initDatabase(): MysqlDatabase {
+  const db = createMysqlDatabase({
+    host: config.DB_HOST,
+    port: config.DB_PORT,
+    user: config.DB_USER,
+    password: config.DB_PASSWORD,
+    database: config.DB_DATABASE,
+  });
+  openDatabases.push(db);
+
   db.exec(`CREATE TABLE IF NOT EXISTS barangays (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    latitude REAL NOT NULL CHECK (latitude BETWEEN -90 AND 90),
-    longitude REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
-    delivery_tier INTEGER NOT NULL CHECK (delivery_tier BETWEEN 1 AND 4),
-    base_tier_fee REAL NOT NULL CHECK (base_tier_fee >= 0)
-  );`);
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(191) NOT NULL UNIQUE,
+    latitude DOUBLE NOT NULL,
+    longitude DOUBLE NOT NULL,
+    delivery_tier INT NOT NULL,
+    base_tier_fee DOUBLE NOT NULL,
+    CONSTRAINT barangays_lat_range CHECK (latitude BETWEEN -90 AND 90),
+    CONSTRAINT barangays_lng_range CHECK (longitude BETWEEN -180 AND 180),
+    CONSTRAINT barangays_tier_range CHECK (delivery_tier BETWEEN 1 AND 4),
+    CONSTRAINT barangays_fee_nonneg CHECK (base_tier_fee >= 0)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`);
+
   const insert = db.prepare(
-    'INSERT OR IGNORE INTO barangays (name, latitude, longitude, delivery_tier, base_tier_fee) VALUES (?, ?, ?, ?, ?)'
+    'INSERT IGNORE INTO barangays (name, latitude, longitude, delivery_tier, base_tier_fee) VALUES (?, ?, ?, ?, ?)'
   );
   const seedTx = db.transaction(() => {
     for (const row of SEED) {
@@ -99,7 +109,12 @@ export function initDatabase(dbPath: string = config.DB_PATH): Database {
   return db;
 }
 
-export function findBarangayById(db: Database, id: number): BarangayRow | undefined {
+/** Close every connection opened by initDatabase. */
+export function closeAllDatabases(): void {
+  for (const db of openDatabases.splice(0)) db.close();
+}
+
+export function findBarangayById(db: MysqlDatabase, id: number): BarangayRow | undefined {
   const stmt = db.prepare(
     'SELECT id, name, latitude, longitude, delivery_tier, base_tier_fee FROM barangays WHERE id = ?'
   );

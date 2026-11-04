@@ -1,11 +1,9 @@
-// Shared database types for the dual-database (SQLite/MySQL) architecture.
+// Shared database types. The app runs on MySQL/MariaDB only.
 
-export type DatabaseEngine = "sqlite" | "mysql";
+export type DatabaseEngine = "mysql";
 
 export interface DatabaseConfig {
   engine: DatabaseEngine;
-  // SQLite
-  sqlitePath: string;
   // MySQL
   host: string;
   port: number;
@@ -14,8 +12,8 @@ export interface DatabaseConfig {
   database: string;
   ssl: boolean;
   connectionLimit: number;
-  // Behavior
-  fallbackToSqlite: boolean;
+  queueLimit: number;
+  connectTimeout: number;
   // Raw env passthrough
   [key: string]: unknown;
 }
@@ -39,11 +37,9 @@ export interface Database {
   pragma?(statement: string): void;
   close(): void;
   healthCheck(): boolean;
-  isSqlite(): boolean;
   isMysql(): boolean;
 }
 
 export interface ConnectionFactoryOptions {
   config?: DatabaseConfig;
-  fallback?: boolean;
 }

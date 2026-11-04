@@ -1,7 +1,7 @@
-// Database configuration resolution for the dual-database architecture.
-// Supports SQLite (default/fallback) and MySQL (primary) via environment variables.
+// Database configuration for the app. Runs on MySQL/MariaDB only (e.g. XAMPP locally,
+// Hostinger MySQL in production). Values come from environment variables.
 
-import type { DatabaseConfig, DatabaseEngine } from "./types";
+import type { DatabaseConfig } from "./types";
 
 /**
  * Read an environment variable, returning `fallback` when unset/empty.
@@ -24,42 +24,20 @@ function toInt(v: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function resolveEngine(raw?: string): DatabaseEngine {
-  const v = (raw ?? env("DB_ENGINE", env("DB_TYPE", env("DATABASE_ENGINE", env("DB_DRIVER", ""))))).toLowerCase().trim();
-  if (v === "mysql" || v === "mariadb") return "mysql";
-  if (v === "sqlite" || v === "sqlite3" || v === "") return "sqlite";
-  // Heuristic: if MySQL host is provided, prefer MySQL
-  if (env("DB_HOST") || env("MYSQL_HOST")) return "mysql";
-  return "sqlite";
-}
-
 export function getDatabaseConfig(overrides: Partial<DatabaseConfig> = {}): DatabaseConfig {
-  const engine = overrides.engine ?? resolveEngine();
   const cfg: DatabaseConfig = {
-    engine,
-    sqlitePath: overrides.sqlitePath ?? env("SQLITE_PATH", env("DB_NAME", "laundry.db")),
+    engine: "mysql",
     host: overrides.host ?? env("DB_HOST", env("MYSQL_HOST", "127.0.0.1")),
     port: overrides.port ?? toInt(env("DB_PORT", env("MYSQL_PORT", "3306")), 3306),
     user: overrides.user ?? env("DB_USER", env("MYSQL_USER", "root")),
     password: overrides.password ?? env("DB_PASSWORD", env("MYSQL_PASSWORD", "")),
-    database: overrides.database ?? env("DB_DATABASE", env("DB_NAME", env("MYSQL_DATABASE", env("MYSQL_DB", "laundry")))),
+    database: overrides.database ?? env("DB_DATABASE", env("MYSQL_DATABASE", env("MYSQL_DB", "laundry"))),
     ssl: overrides.ssl ?? toBool(env("DB_SSL", env("MYSQL_SSL", "false")), false),
     connectionLimit: overrides.connectionLimit ?? toInt(env("DB_POOL_SIZE", env("MYSQL_POOL_SIZE", "10")), 10),
     queueLimit: overrides.queueLimit ?? toInt(env("DB_QUEUE_LIMIT", env("MYSQL_QUEUE_LIMIT", "100")), 100),
     connectTimeout: overrides.connectTimeout ?? toInt(env("DB_CONNECT_TIMEOUT", env("MYSQL_CONNECT_TIMEOUT", "10000")), 10000),
-    fallbackToSqlite: overrides.fallbackToSqlite ?? toBool(env("DB_FALLBACK_TO_SQLITE", "true"), true),
   };
-  return { ...cfg, ...overrides };
+  return { ...cfg, ...overrides, engine: "mysql" };
 }
-
-export function isSqliteConfig(cfg: DatabaseConfig): boolean {
-  return cfg.engine === "sqlite";
-}
-
-export function isMysqlConfig(cfg: DatabaseConfig): boolean {
-  return cfg.engine === "mysql";
-}
-
-export const DEFAULT_SQLITE_PATH = "laundry.db";
 
 export default getDatabaseConfig;

@@ -115,7 +115,6 @@ export function createMysqlAdapter(config: DatabaseConfig): DbIface {
     healthCheck() {
       try { sync(pool.query("SELECT 1")); return true; } catch { return false; }
     },
-    isSqlite() { return false; },
     isMysql() { return true; },
   };
   return adapter;

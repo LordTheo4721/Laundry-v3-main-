@@ -96,7 +96,7 @@ export function createDeliveryRouter(db: Database): Router {
   return router;
 }
 
-export const deliveryRouter = createDeliveryRouter(initDatabase(config.DB_PATH));
+export const deliveryRouter = createDeliveryRouter(initDatabase());
 export { deliveryRouter as router };
 
 export default deliveryRouter;

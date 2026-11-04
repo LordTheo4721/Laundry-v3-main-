@@ -13,7 +13,11 @@ export const ROAD_FACTOR = 1.0;
 export const MAX_SERVICE_RADIUS_KM = 25;
 
 export const PORT = Number(process.env.PORT ?? 3000);
-export const DB_PATH = process.env.DB_PATH ?? './data/delivery.db';
+export const DB_HOST = process.env.DB_HOST ?? '127.0.0.1';
+export const DB_PORT = Number(process.env.DB_PORT ?? 3306);
+export const DB_USER = process.env.DB_USER ?? 'root';
+export const DB_PASSWORD = process.env.DB_PASSWORD ?? '';
+export const DB_DATABASE = process.env.DB_DATABASE ?? 'laundry';
 
 export const config = {
   STORE,
@@ -23,7 +27,11 @@ export const config = {
   ROAD_FACTOR,
   MAX_SERVICE_RADIUS_KM,
   PORT,
-  DB_PATH,
+  DB_HOST,
+  DB_PORT,
+  DB_USER,
+  DB_PASSWORD,
+  DB_DATABASE,
 };
 
 export default config;
