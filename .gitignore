@@ -25,4 +25,3 @@ ve.json
 *.db-journal
 *.db-wal
 *.db-shm 
-server.bundle.mjs
