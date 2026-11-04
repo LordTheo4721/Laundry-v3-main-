@@ -3,11 +3,18 @@
 // synchronously through synckit so the rest of the app can keep using db.prepare().get/all/run.
 
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 import { createSyncFn } from "synckit";
 import type { Database as DbIface, Statement, DatabaseConfig } from "./types";
 import { translateSql } from "./sql";
 
-const WORKER_PATH = fileURLToPath(new URL("./mysql-worker.mjs", import.meta.url));
+// The worker is src/db/mysql-worker.mjs in development and, when the server is bundled
+// into server.bundle.mjs at the project root, it is still loaded from src/db/.
+const WORKER_CANDIDATES = [
+  fileURLToPath(new URL("./src/db/mysql-worker.mjs", import.meta.url)),
+  fileURLToPath(new URL("./mysql-worker.mjs", import.meta.url)),
+];
+const WORKER_PATH = WORKER_CANDIDATES.find((p) => existsSync(p)) ?? WORKER_CANDIDATES[0];
 
 interface WorkerResult {
   rows?: any[];
