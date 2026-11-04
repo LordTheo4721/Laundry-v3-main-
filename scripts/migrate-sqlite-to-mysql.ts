@@ -32,7 +32,8 @@ function env(name: string, fallback = ""): string {
   return v === undefined || v === null || v === "" ? fallback : v;
 }
 
-const SQLITE_PATH = env("SQLITE_PATH", env("DB_NAME", "laundry.db"));
+const SQLITE_PATH_RAW = env("SQLITE_PATH", env("DB_NAME", "laundry.db"));
+const SQLITE_PATH = path.isAbsolute(SQLITE_PATH_RAW) ? SQLITE_PATH_RAW : path.resolve(ROOT, SQLITE_PATH_RAW);
 const MYSQL_HOST = env("DB_HOST", env("MYSQL_HOST", "127.0.0.1"));
 const MYSQL_PORT = parseInt(env("DB_PORT", env("MYSQL_PORT", "3306")), 10) || 3306;
 const MYSQL_USER = env("DB_USER", env("MYSQL_USER", "root"));
