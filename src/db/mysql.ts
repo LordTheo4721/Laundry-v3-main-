@@ -113,7 +113,12 @@ export function createMysqlAdapter(config: DatabaseConfig): DbIface {
       try { sync(pool.end()); } catch { /* ignore */ }
     },
     healthCheck() {
-      try { sync(pool.query("SELECT 1")); return true; } catch { return false; }
+      try { sync(pool.query("SELECT 1")); return true; } catch (e) {
+        const err = e as { code?: string; errno?: number; sqlState?: string };
+        // Log only the error code (never the password or SQL) so connection problems are diagnosable.
+        console.error(`[DB] MySQL health check error: code=${err?.code ?? "UNKNOWN"} errno=${err?.errno ?? "n/a"} sqlState=${err?.sqlState ?? "n/a"}`);
+        return false;
+      }
     },
     isMysql() { return true; },
   };
